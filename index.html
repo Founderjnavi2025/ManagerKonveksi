@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<meta name="theme-color" content="#050a0f">
+<title>KONVEKSI HUB — Multi-Room</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="bootScreen" class="boot-screen">
+  <div class="boot-logo">KONVEKSI <span>HUB</span></div>
+  <div class="boot-spinner"></div>
+</div>
+
+<!-- ════════ LOGIN ════════ -->
+<div class="page-full" id="page-login" style="display:none;">
+  <div class="auth-box">
+    <div class="logo-large">KONVEKSI <span>HUB</span></div>
+    <div class="auth-sub">Multi-Room Demo</div>
+
+    <label class="f">Email</label>
+    <input type="email" id="loginEmail" placeholder="nama@email.com" autocomplete="email">
+
+    <label class="f">Password</label>
+    <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
+
+    <button class="btn btn-primary" id="btnLogin" onclick="doLogin()">MASUK</button>
+
+    <div class="hint" style="text-align:center;margin-top:14px;">
+      ℹ️ Super Admin: <b>freecssbambangj@gmail.com</b>
+    </div>
+    <div class="hint" style="text-align:center;margin-top:6px;color:var(--warn);">
+      Akun owner dibuat oleh Super Admin
+    </div>
+  </div>
+</div>
+
+<!-- ════════ SUPER ADMIN ════════ -->
+<div class="page-full" id="page-superadmin" style="display:none;">
+  <header>
+    <div class="logo">KONVEKSI <span>HUB</span></div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div class="clock" id="saClock">--:--</div>
+      <button class="btn-logout" onclick="doLogout()">KELUAR</button>
+    </div>
+  </header>
+
+  <div class="page" style="display:block;max-width:900px;">
+    <h2 class="section">Ringkasan Platform</h2>
+    <div class="stat-grid" id="saStats"></div>
+
+    <h2 class="section">Daftar Room Konveksi</h2>
+    <button class="btn btn-primary" onclick="openRoomModal()">+ BUAT ROOM BARU</button>
+    <div id="saRoomList" style="margin-top:14px;"></div>
+
+    <h2 class="section">Daftar Akun</h2>
+    <div id="saUserList"></div>
+  </div>
+</div>
+
+<!-- ════════ ROOM PICKER (untuk owner) ════════ -->
+<div class="page-full" id="page-roompicker" style="display:none;">
+  <header>
+    <div class="logo">KONVEKSI <span>HUB</span></div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div class="clock" id="pickerClock">--:--</div>
+      <button class="btn-logout" onclick="doLogout()">KELUAR</button>
+    </div>
+  </header>
+  <div class="page" style="display:block;">
+    <h2 class="section" id="pickerTitle">Room Konveksi Anda</h2>
+    <div id="pickerList"></div>
+    <div id="pickerEmpty" class="empty" style="display:none;">
+      <span class="big">🏢</span>
+      Anda belum memiliki room.<br>
+      Hubungi Super Admin.
+    </div>
+  </div>
+</div>
+
+<!-- ════════ JAIT4 (dalam room) ════════ -->
+<div class="page-full" id="page-room" style="display:none;">
+  <header>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <button class="btn-back" onclick="exitRoom()">←</button>
+      <div>
+        <div class="logo" id="roomTitle">JAIT4</div>
+        <div class="room-sub" id="roomSub">—</div>
+      </div>
+    </div>
+    <div class="clock" id="roomClock">--:--</div>
+  </header>
+
+  <div class="tabs">
+    <button class="active" data-tab="dashboard" onclick="switchTab('dashboard')">🏠 DASHBOARD</button>
+    <button data-tab="pekerjaan" onclick="switchTab('pekerjaan')">📦 PEKERJAAN</button>
+    <button data-tab="fisik" onclick="switchTab('fisik')">📊 FISIK</button>
+    <button data-tab="payroll" onclick="switchTab('payroll')">💰 PAYROLL</button>
+    <button data-tab="pengaturan" onclick="switchTab('pengaturan')">⚙️ LAIN</button>
+  </div>
+
+  <div class="page active" id="tab-dashboard">
+    <div class="card" style="border-left-color:var(--neon2)">
+      <div class="card-info">📅 <b id="periodeLabel">—</b></div>
+      <div class="card-info" id="periodeStatus">—</div>
+    </div>
+    <h3 class="sec">Ringkasan Periode</h3>
+    <div class="stat-grid" id="dashStats"></div>
+    <h3 class="sec">Aksi Cepat</h3>
+    <button class="btn btn-primary" onclick="openAmbilModal()">+ AMBIL BARANG</button>
+    <h3 class="sec">5 Transaksi Terakhir</h3>
+    <div id="dashTransaksi"></div>
+  </div>
+
+  <div class="page" id="tab-pekerjaan">
+    <button class="btn btn-primary" onclick="openAmbilModal()">+ AMBIL BARANG</button>
+    <h3 class="sec">Filter</h3>
+    <div class="chip-row" id="filterStatusRow"></div>
+    <input class="mini" type="text" id="filterCari" placeholder="🔍 Cari pekerja / barang..." oninput="renderPekerjaan()">
+    <h3 class="sec">Daftar Pekerjaan</h3>
+    <div id="pekerjaanList"></div>
+  </div>
+
+  <div class="page" id="tab-fisik">
+    <h3 class="sec">Ringkasan Fisik</h3>
+    <div class="stat-grid" id="fisikStats"></div>
+    <h3 class="sec">Tabel Barang Fisik</h3>
+    <div style="overflow-x:auto;">
+      <table class="tbl">
+        <thead><tr>
+          <th>Tgl</th><th>Pekerja</th><th>Barang</th>
+          <th>Ambil</th><th>Setor</th><th>Sisa</th><th>Status</th>
+        </tr></thead>
+        <tbody id="fisikTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="page" id="tab-payroll">
+    <h3 class="sec">Filter</h3>
+    <select class="mini" id="payrollWorkerFilter" onchange="renderPayroll()">
+      <option value="">— Semua Pekerja —</option>
+    </select>
+    <h3 class="sec">Rekap Payroll</h3>
+    <div id="payrollList"></div>
+    <h3 class="sec">Riwayat Transaksi</h3>
+    <div id="transaksiList"></div>
+  </div>
+
+  <div class="page" id="tab-pengaturan">
+    <h3 class="sec">Pekerja</h3>
+    <button class="btn btn-primary" onclick="openWorkerModal()">+ PEKERJA BARU</button>
+    <div id="workerList" style="margin-top:10px;"></div>
+
+    <h3 class="sec">Periode Aktif</h3>
+    <div id="periodeInfo"></div>
+    <button class="btn btn-ghost" onclick="openPeriodeModal()">✏️ UBAH PERIODE</button>
+    <button class="btn btn-warn" onclick="tutupPeriode()">🔒 TUTUP PERIODE</button>
+    <div id="periodeHistory" style="margin-top:8px;"></div>
+
+    <h3 class="sec">Tarif Default</h3>
+    <div id="tarifInfo"></div>
+    <button class="btn btn-ghost" onclick="openTarifModal()">✏️ UBAH TARIF</button>
+
+    <h3 class="sec">Backup / Restore</h3>
+    <button class="btn btn-done" onclick="backupJSON()">💾 BACKUP JSON</button>
+    <button class="btn btn-primary" onclick="document.getElementById('fileRestore').click()">📥 RESTORE</button>
+    <input type="file" id="fileRestore" accept=".json,application/json" style="display:none;" onchange="restoreJSON(event)">
+    <button class="btn btn-danger" onclick="resetRoomData()">⚠️ RESET DATA ROOM</button>
+  </div>
+</div>
+
+<!-- ════════ MODAL: ROOM ════════ -->
+<div class="modal-bg" id="roomModal">
+  <div class="modal">
+    <h3 id="rm_title">Buat Room Baru</h3>
+    <label class="f">Nama Konveksi</label>
+    <input type="text" id="rm_nama" placeholder="cth: Konveksi Berkah">
+    <label class="f">Slug (huruf kecil, tanpa spasi)</label>
+    <input type="text" id="rm_slug" placeholder="cth: berkah" oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9-]/g,'')">
+    <label class="f">Nama Pemilik</label>
+    <input type="text" id="rm_owner" placeholder="cth: Pak Budi">
+    <label class="f">Email Pemilik (untuk login)</label>
+    <input type="email" id="rm_email" placeholder="cth: budi@email.com">
+    <label class="f">Password Awal</label>
+    <input type="text" id="rm_password" placeholder="min 6 karakter" value="konveksi123">
+    <label class="f">Paket</label>
+    <select id="rm_paket">
+      <option value="basic">Basic</option>
+      <option value="pro">Pro</option>
+      <option value="enterprise">Enterprise</option>
+    </select>
+    <label class="f">Masa Aktif (hari)</label>
+    <input type="number" id="rm_masa" placeholder="30" value="30" inputmode="numeric">
+    <label class="f">Status</label>
+    <select id="rm_status">
+      <option value="aktif">Aktif</option>
+      <option value="ditangguhkan">Ditangguhkan</option>
+    </select>
+    <div class="divider"></div>
+    <button class="btn btn-done" onclick="saveRoom()">SIMPAN</button>
+    <button class="btn btn-ghost" onclick="closeModal('roomModal')">BATAL</button>
+  </div>
+</div>
+
+<!-- ════════ MODAL: AMBIL BARANG ════════ -->
+<div class="modal-bg" id="ambilModal">
+  <div class="modal">
+    <h3>+ Ambil Barang</h3>
+    <label class="f">Pekerja</label>
+    <select id="am_worker"></select>
+    <div id="am_workerInfo"></div>
+    <label class="f">Nama Barang</label>
+    <input type="text" id="am_barang" placeholder="cth: Kaos Polos">
+    <label class="f">Jenis</label>
+    <select id="am_jenis">
+      <option value="Oblong">Oblong</option>
+      <option value="Kerah">Kerah</option>
+    </select>
+    <label class="f">Jumlah Ambil (pcs)</label>
+    <input type="number" id="am_jumlah" inputmode="numeric">
+    <label class="f">Tarif per Lusin</label>
+    <input type="number" id="am_tarif" inputmode="numeric">
+    <label class="f">Tanggal Ambil</label>
+    <input type="date" id="am_tgl">
+    <div class="alert ok" id="am_preview" style="display:none;"></div>
+    <button class="btn btn-done" onclick="simpanAmbil()">SIMPAN</button>
+    <button class="btn btn-ghost" onclick="closeModal('ambilModal')">BATAL</button>
+  </div>
+</div>
+
+<!-- ════════ MODAL: SETOR ════════ -->
+<div class="modal-bg" id="setorModal">
+  <div class="modal">
+    <h3>📦 Setor Barang</h3>
+    <div id="setorInfo"></div>
+    <label class="f">Jumlah Setor (pcs)</label>
+    <input type="number" id="st_pcs" inputmode="numeric">
+    <div id="st_alert"></div>
+    <label class="f">Tanggal Setor</label>
+    <input type="date" id="st_tgl">
+    <label class="f">Keterangan (opsional)</label>
+    <input type="text" id="st_ket" placeholder="cth: 3 rusak">
+    <button class="btn btn-done" onclick="simpanSetor()">KONFIRMASI SETOR</button>
+    <button class="btn btn-ghost" onclick="closeModal('setorModal')">BATAL</button>
+  </div>
+</div>
+
+<!-- ════════ MODAL: PANJAR ════════ -->
+<div class="modal-bg" id="panjarModal">
+  <div class="modal">
+    <h3>🟡 Panjar (Uang Muka)</h3>
+    <div id="panjarInfo"></div>
+    <label class="f">Nilai Panjar (Rp)</label>
+    <input type="number" id="pj_jumlah" inputmode="numeric">
+    <div id="pj_alert"></div>
+    <label class="f">Tanggal</label>
+    <input type="date" id="pj_tgl">
+    <label class="f">Catatan (opsional)</label>
+    <input type="text" id="pj_ket">
+    <button class="btn btn-warn" onclick="simpanPanjar()">KONFIRMASI PANJAR</button>
+    <button class="btn btn-ghost" onclick="closeModal('panjarModal')">BATAL</button>
+  </div>
+</div>
+
+<!-- ════════ MODAL: BAYAR ════════ -->
+<div class="modal-bg" id="bayarModal">
+  <div class="modal">
+    <h3>💰 Bayar Upah</h3>
+    <div id="bayarInfo"></div>
+    <label class="f">Jumlah Bayar (Rp)</label>
+    <input type="number" id="by_jumlah" inputmode="numeric">
+    <div id="by_alert"></div>
+    <label class="f">Tanggal</label>
+    <input type="date" id="by_tgl">
+    <label class="f">Catatan (opsional)</label>
+    <input type="text" id="by_ket">
+    <button class="btn btn-done" onclick="simpanBayar()">KONFIRMASI BAYAR</button>
+    <button class="btn btn-ghost" onclick="closeModal('bayarModal')">BATAL</button>
+  </div>
+</div>
+
+<!-- ════════ MODAL: PEKERJA ════════ -->
+<div class="modal-bg" id="workerModal">
+  <div class="modal">
+    <h3 id="wm_title">Tambah Pekerja</h3>
+    <label class="f">Nama</label>
+    <input type="text" id="wm_nama" placeholder="cth: Kang Budi">
+    <label class="f">Nomor Telepon (opsional)</label>
+    <input type="text" id="wm_telepon" inputmode="tel">
+    <label class="f">Status</label>
+    <select id="wm_aktif">
+      <option value="true">Aktif</option>
+      <option value="false">Nonaktif</option>
+    </select>
+    <button class="btn btn-done" onclick="simpanWorker()">SIMPAN</button>
+    <button class="btn btn-ghost" onclick="closeModal('workerModal')">BATAL</button>
+  </div>
+</div>
+
+<!-- ════════ MODAL: PERIODE ════════ -->
+<div class="modal-bg" id="periodeModal">
+  <div class="modal">
+    <h3>✏️ Ubah Periode Aktif</h3>
+    <label class="f">Mulai (Sabtu)</label>
+    <input type="date" id="pm_mulai">
+    <label class="f">Akhir (Jumat)</label>
+    <input type="date" id="pm_akhir">
+    <button class="btn btn-done" onclick="simpanPeriode()">SIMPAN</button>
+    <button class="btn btn-ghost" onclick="closeModal('periodeModal')">BATAL</button>
+  </div>
+</div>
+
+<!-- ════════ MODAL: TARIF ════════ -->
+<div class="modal-bg" id="tarifModal">
+  <div class="modal">
+    <h3>Ubah Tarif Default</h3>
+    <label class="f">Tarif per Lusin</label>
+    <input type="number" id="tm_tarif" inputmode="numeric">
+    <button class="btn btn-done" onclick="simpanTarif()">SIMPAN</button>
+    <button class="btn btn-ghost" onclick="closeModal('tarifModal')">BATAL</button>
+  </div>
+</div>
+
+<!-- ════════ MODAL: DETAIL JOB ════════ -->
+<div class="modal-bg" id="detailJobModal">
+  <div class="modal">
+    <h3 id="dj_title">Detail</h3>
+    <div id="dj_content"></div>
+    <button class="btn btn-ghost" onclick="closeModal('detailJobModal')">TUTUP</button>
+  </div>
+</div>
+
+<!-- ════════ MODAL: SLIP ════════ -->
+<div class="modal-bg" id="slipModal">
+  <div class="modal">
+    <div id="printArea"></div>
+    <button class="btn btn-primary" onclick="window.print()" style="margin-top:12px;">🖨️ PRINT / PDF</button>
+    <button class="btn btn-ghost" onclick="closeModal('slipModal')">TUTUP</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
