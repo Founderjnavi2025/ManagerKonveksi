@@ -341,7 +341,53 @@
     <button class="btn btn-ghost" onclick="closeModal('slipModal')">TUTUP</button>
   </div>
 </div>
+<!-- ════════ MODAL: PENDING ════════ -->
+<div class="modal-bg" id="pendingModal">
+  <div class="modal">
+    <h3>⏸️ Pindah ke Pending</h3>
+    <div id="pendingInfo"></div>
+    <label class="f">Alasan Pending (wajib)</label>
+    <input type="text" id="pendingAlasan" placeholder="cth: Rip & mangset habis">
+    <div class="alert danger" style="margin-top:10px;">
+      ⚠️ <b>Perhatian!</b><br>
+      Setelah pending, pekerja <b>bisa ambil barang baru</b>.<br>
+      Job lama tetap tercatat dan harus disetor sisa.
+    </div>
+    <button class="btn btn-warn" onclick="konfirmasiPending()">KONFIRMASI PENDING</button>
+    <button class="btn btn-ghost" onclick="closeModal('pendingModal')">BATAL</button>
+  </div>
+</div>
 
+<!-- ════════ MODAL: BAYAR PENDING ════════ -->
+<div class="modal-bg" id="bayarPendingModal">
+  <div class="modal">
+    <h3>💰 Bayar Upah Pending</h3>
+    <div id="bayarPendingInfo"></div>
+    <label class="f">Nominal Bayar (Rp)</label>
+    <input type="number" id="bp_jumlah" inputmode="numeric" placeholder="cth: 133333">
+    <div class="hint">Tulis manual sesuai kesepakatan. Setelah dibayar, catat sebagai lunas.</div>
+    <label class="f">Catatan</label>
+    <input type="text" id="bp_catatan" placeholder="cth: Sudah dibayar, menunggu setor fisik">
+    <button class="btn btn-done" onclick="konfirmasiBayarPending()">KONFIRMASI BAYAR</button>
+    <button class="btn btn-ghost" onclick="closeModal('bayarPendingModal')">BATAL</button>
+  </div>
+</div>
+
+<!-- ════════ MODAL: SETOR FISIK PENDING ════════ -->
+<div class="modal-bg" id="setorFisikModal">
+  <div class="modal">
+    <h3>📦 Setor Fisik (Pending)</h3>
+    <div id="setorFisikInfo"></div>
+    <label class="f">Jumlah Setor (pcs)</label>
+    <input type="number" id="sf_pcs" inputmode="numeric">
+    <div id="sf_alert"></div>
+    <div class="alert warn" style="margin-top:10px;">
+      ℹ️ <b>Info:</b> Gaji job ini sudah dibayar. Setor fisik tidak memicu pembayaran baru.
+    </div>
+    <button class="btn btn-done" onclick="konfirmasiSetorFisik()">KONFIRMASI SETOR</button>
+    <button class="btn btn-ghost" onclick="closeModal('setorFisikModal')">BATAL</button>
+  </div>
+</div>
 <div id="toast"></div>
 
 <!-- Supabase SDK dari CDN -->
