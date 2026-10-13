@@ -1,26 +1,8 @@
-/* ═══════════════════════════════════════════════════
-   KONVEKSI HUB — Multi-Room + JAIT4
-   Super Admin: freecssbambangj@gmail.com / ioio8989
-   ═══════════════════════════════════════════════════ */
 
 /* ═══════════════════════════════════════════════════
-   KONSTANTA
+   KONVEKSI HUB — app.js
+   Multi-Room + JAIT4 + Fitur PENDING
    ═══════════════════════════════════════════════════ */
-const SUPER_ADMIN = {
-  id: 'super_admin_default',
-  email: 'freecssbambangj@gmail.com',
-  password: 'ioio8989',
-  nama: 'Super Admin',
-  role: 'super_admin',
-};
-
-const LS = {
-  users: 'kh_users',
-  session: 'kh_session',
-  rooms: 'kh_rooms',
-  members: 'kh_members',
-  roomData: (roomId) => 'kh_data_' + roomId,
-};
 
 /* ═══════════════════════════════════════════════════
    STATE GLOBAL
@@ -29,13 +11,11 @@ const S = {
   user: null,
   profile: null,
   room: null,
-  // Data JAIT4 per room
   workers: [],
   jobs: [],
   transactions: [],
   periods: [],
   tarif: { tarif: 8000 },
-  // UI state
   filterStatus: 'semua',
   currentJobId: null,
   currentTxId: null,
@@ -77,98 +57,6 @@ window.openModal = id => $(id).classList.add('show');
 window.closeModal = id => $(id).classList.remove('show');
 
 /* ═══════════════════════════════════════════════════
-   STORAGE
-   ═══════════════════════════════════════════════════ */
-function lsRead(key, fallback){
-  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
-  catch { return fallback; }
-}
-function lsWrite(key, val){ localStorage.setItem(key, JSON.stringify(val)); }
-
-/* ─── USERS ─── */
-function loadUsers(){
-  let users = lsRead(LS.users, []);
-  // Pastikan super admin ada
-  if(!users.find(u => u.email === SUPER_ADMIN.email)){
-    users.push({ ...SUPER_ADMIN });
-    lsWrite(LS.users, users);
-  }
-  return users;
-}
-function saveUsers(users){ lsWrite(LS.users, users); }
-
-/* ─── SESSION ─── */
-function saveSession(user){ lsWrite(LS.session, { id: user.id, email: user.email }); }
-function clearSession(){ localStorage.removeItem(LS.session); }
-function getSession(){ return lsRead(LS.session, null); }
-
-/* ─── ROOMS ─── */
-function loadRooms(){ return lsRead(LS.rooms, []); }
-function saveRooms(rooms){ lsWrite(LS.rooms, rooms); }
-
-/* ─── MEMBERS ─── */
-function loadMembers(){ return lsRead(LS.members, []); }
-function saveMembers(m){ lsWrite(LS.members, m); }
-
-/* ─── DATA PER ROOM ─── */
-function loadRoomData(roomId){
-  const key = LS.roomData(roomId);
-  return lsRead(key, {
-    workers: [],
-    jobs: [],
-    transactions: [],
-    periods: [],
-    tarif: { tarif: 8000 },
-  });
-}
-function saveRoomData(roomId, data){ lsWrite(LS.roomData(roomId), data); }
-
-/* ═══════════════════════════════════════════════════
-   AUTH
-   ═══════════════════════════════════════════════════ */
-window.doLogin = async function(){
-  const email = $('loginEmail').value.trim().toLowerCase();
-  const pass = $('loginPassword').value;
-  if(!email || !pass){ toast('Isi email dan password', true); return; }
-
-  $('btnLogin').textContent = 'MEMUAT...';
-
-  const users = loadUsers();
-  const user = users.find(u => u.email.toLowerCase() === email);
-  if(!user || user.password !== pass){
-    toast('Email atau password salah', true);
-    $('btnLogin').textContent = 'MASUK';
-    return;
-  }
-
-  S.user = user;
-  S.profile = { id: user.id, nama: user.nama, role: user.role, email: user.email };
-  saveSession(user);
-
-  // Route
-  if(user.role === 'super_admin'){
-    await loadSuperAdmin();
-    showPage('page-superadmin');
-  } else {
-    await loadRoomPicker();
-    showPage('page-roompicker');
-  }
-
-  toast('✓ Selamat datang, ' + user.nama);
-};
-
-window.doLogout = function(){
-  clearSession();
-  S.user = null; S.profile = null; S.room = null;
-  S.workers = []; S.jobs = []; S.transactions = []; S.periods = [];
-  $('loginEmail').value = '';
-  $('loginPassword').value = '';
-  $('btnLogin').textContent = 'MASUK';
-  showPage('page-login');
-  toast('Keluar');
-};
-
-/* ═══════════════════════════════════════════════════
    PAGE SWITCHING
    ═══════════════════════════════════════════════════ */
 function showPage(id){
@@ -190,29 +78,82 @@ window.switchTab = function(t){
 };
 
 /* ═══════════════════════════════════════════════════
+   AUTH (SUPABASE)
+   ═══════════════════════════════════════════════════ */
+window.doLogin = async function(){
+  const email = $('loginEmail').value.trim().toLowerCase();
+  const pass = $('loginPassword').value;
+  if(!email || !pass){ toast('Isi email dan password', true); return; }
+
+  $('btnLogin').textContent = 'MEMUAT...';
+
+  try {
+    // Login via Supabase
+    const user = await Auth.login(email, pass);
+    S.user = user;
+    
+    // Ambil profile
+    S.profile = await Profiles.get(user.id);
+    if(!S.profile){
+      toast('Profile tidak ditemukan. Hubungi admin.', true);
+      await Auth.logout();
+      $('btnLogin').textContent = 'MASUK';
+      return;
+    }
+
+    // Route
+    if(S.profile.role === 'super_admin'){
+      await loadSuperAdmin();
+      showPage('page-superadmin');
+    } else {
+      await loadRoomPicker();
+      showPage('page-roompicker');
+    }
+
+    toast('✓ Selamat datang, ' + S.profile.nama);
+  } catch(e) {
+    toast('Login gagal: ' + e.message, true);
+    $('btnLogin').textContent = 'MASUK';
+  }
+};
+
+window.doLogout = async function(){
+  try { await Auth.logout(); } catch(e){}
+  S.user = null; S.profile = null; S.room = null;
+  S.workers = []; S.jobs = []; S.transactions = []; S.periods = [];
+  $('loginEmail').value = '';
+  $('loginPassword').value = '';
+  $('btnLogin').textContent = 'MASUK';
+  showPage('page-login');
+  toast('Keluar');
+};
+
+/* ═══════════════════════════════════════════════════
    SUPER ADMIN
    ═══════════════════════════════════════════════════ */
 async function loadSuperAdmin(){
-  const rooms = loadRooms();
-  const users = loadUsers();
+  const rooms = await Rooms.listAll();
+  const profiles = await Profiles.listAll();
 
-  // Statistik
   let totalWorkers = 0, totalJobs = 0;
-  rooms.forEach(r => {
-    const data = loadRoomData(r.id);
-    totalWorkers += data.workers.length;
-    totalJobs += data.jobs.length;
-  });
+  for(const r of rooms){
+    try {
+      const w = await Workers.list(r.id);
+      const j = await Jobs.list(r.id);
+      totalWorkers += w.length;
+      totalJobs += j.length;
+    } catch(e){ console.warn(e); }
+  }
 
   $('saStats').innerHTML = `
     <div class="stat-card"><div class="lbl">Total Room</div><div class="val">${rooms.length}</div></div>
-    <div class="stat-card"><div class="lbl">Total Akun</div><div class="val">${users.length}</div></div>
+    <div class="stat-card"><div class="lbl">Total Akun</div><div class="val">${profiles.length}</div></div>
     <div class="stat-card"><div class="lbl">Total Pekerja</div><div class="val">${totalWorkers}</div></div>
     <div class="stat-card"><div class="lbl">Total Pekerjaan</div><div class="val">${totalJobs}</div></div>
   `;
 
-  renderSaRooms(rooms, users);
-  renderSaUsers(users);
+  renderSaRooms(rooms, profiles);
+  renderSaUsers(profiles);
 }
 
 function renderSaRooms(rooms, users){
@@ -225,7 +166,7 @@ function renderSaRooms(rooms, users){
     const owner = users.find(u => u.id === r.pemilik_id);
     const ownerName = owner ? owner.nama : '(belum ada)';
     const ownerEmail = owner ? owner.email : '—';
-    const statusClass = r.status === 'aktif' ? 'aktif' : 'off';
+    const statusClass = r.status === 'aktif' ? 'ok' : 'dim';
     const berakhir = r.berakhir_at ? new Date(r.berakhir_at) : null;
     const now = new Date();
     let sisaHari = '';
@@ -238,11 +179,11 @@ function renderSaRooms(rooms, users){
     return `<div class="card" style="border-left-color:${r.status==='aktif'?'var(--neon)':'var(--dim)'}">
       <div class="card-head">
         <span class="card-code">/${esc(r.slug)}</span>
-        <span class="badge ${r.status==='aktif'?'ok':'dim'}">${r.status.toUpperCase()}</span>
+        <span class="badge ${statusClass}">${r.status.toUpperCase()}</span>
       </div>
       <div class="card-name">${esc(r.nama)}</div>
       <div class="card-info"><b>Pemilik:</b> ${esc(ownerName)} • ${esc(ownerEmail)}</div>
-      <div class="card-info"><b>Paket:</b> ${esc(r.paket)} • <b>Berakhir:</b> ${r.berakhir_at || '—'}${sisaHari}</div>
+      <div class="card-info"><b>Paket:</b> ${esc(r.paket || 'basic')} • <b>Berakhir:</b> ${r.berakhir_at || '—'}${sisaHari}</div>
       <div class="row2btn" style="margin-top:8px;">
         <button class="btn btn-sm btn-primary" onclick="masukRoom('${r.id}')">MASUK</button>
         <button class="btn btn-sm btn-ghost" onclick="editRoom('${r.id}')">UBAH</button>
@@ -255,15 +196,18 @@ function renderSaRooms(rooms, users){
 
 function renderSaUsers(users){
   const wrap = $('saUserList');
+  if(users.length === 0){
+    wrap.innerHTML = '<div class="empty" style="padding:16px;">Belum ada akun</div>';
+    return;
+  }
   wrap.innerHTML = users.map(u => `
     <div class="card" style="padding:9px 11px;">
       <div class="card-name" style="font-size:.88rem;">${esc(u.nama)} <span class="badge ${u.role==='super_admin'?'warn':'blue'}">${u.role.toUpperCase()}</span></div>
-      <div class="card-info">📧 ${esc(u.email)}</div>
+      <div class="card-info">📧 ${esc(u.email || '—')}</div>
     </div>
   `).join('');
 }
 
-/* ── Modal Room ── */
 window.openRoomModal = function(){
   S.editingRoomId = null;
   $('rm_title').textContent = 'Buat Room Baru';
@@ -278,33 +222,31 @@ window.openRoomModal = function(){
   window.openModal('roomModal');
 };
 
-window.editRoom = function(id){
-  const rooms = loadRooms();
-  const users = loadUsers();
-  const r = rooms.find(x => x.id === id);
-  if(!r) return;
-  S.editingRoomId = id;
-  const owner = users.find(u => u.id === r.pemilik_id);
-  $('rm_title').textContent = 'Ubah Room';
-  $('rm_nama').value = r.nama;
-  $('rm_slug').value = r.slug;
-  $('rm_owner').value = owner ? owner.nama : '';
-  $('rm_email').value = owner ? owner.email : '';
-  $('rm_password').value = '';
-  $('rm_paket').value = r.paket || 'basic';
-  $('rm_status').value = r.status || 'aktif';
-
-  // Masa aktif — hitung dari berakhir_at
-  if(r.berakhir_at){
-    const diff = Math.ceil((new Date(r.berakhir_at) - new Date()) / 86400000);
-    $('rm_masa').value = Math.max(0, diff);
-  } else {
-    $('rm_masa').value = 30;
-  }
-  window.openModal('roomModal');
+window.editRoom = async function(id){
+  try {
+    const r = await Rooms.get(id);
+    if(!r) return;
+    S.editingRoomId = id;
+    const owner = r.pemilik_id ? await Profiles.get(r.pemilik_id) : null;
+    $('rm_title').textContent = 'Ubah Room';
+    $('rm_nama').value = r.nama;
+    $('rm_slug').value = r.slug;
+    $('rm_owner').value = owner ? owner.nama : '';
+    $('rm_email').value = owner ? owner.email : '';
+    $('rm_password').value = '';
+    $('rm_paket').value = r.paket || 'basic';
+    $('rm_status').value = r.status || 'aktif';
+    if(r.berakhir_at){
+      const diff = Math.ceil((new Date(r.berakhir_at) - new Date()) / 86400000);
+      $('rm_masa').value = Math.max(0, diff);
+    } else {
+      $('rm_masa').value = 30;
+    }
+    window.openModal('roomModal');
+  } catch(e){ toast('Gagal load room: ' + e.message, true); }
 };
 
-window.saveRoom = function(){
+window.saveRoom = async function(){
   const nama = $('rm_nama').value.trim();
   const slug = $('rm_slug').value.trim();
   const ownerNama = $('rm_owner').value.trim();
@@ -317,155 +259,121 @@ window.saveRoom = function(){
   if(!nama){ toast('Isi nama konveksi', true); return; }
   if(!slug || !/^[a-z0-9-]{3,40}$/.test(slug)){ toast('Slug tidak valid', true); return; }
 
-  const rooms = loadRooms();
-  const users = loadUsers();
-
-  // Cek slug unik
-  if(rooms.some(x => x.slug === slug && x.id !== S.editingRoomId)){
-    toast('Slug sudah dipakai', true); return;
-  }
-
   const berakhirAt = new Date(Date.now() + masa * 86400000).toISOString().slice(0,10);
 
-  if(S.editingRoomId){
-    // Update
-    const r = rooms.find(x => x.id === S.editingRoomId);
-    r.nama = nama;
-    r.slug = slug;
-    r.paket = paket;
-    r.status = status;
-    r.berakhir_at = berakhirAt;
-    saveRooms(rooms);
-    toast('✓ Room diubah');
-  } else {
-    // Buat baru — butuh owner
-    if(!ownerEmail){ toast('Isi email pemilik', true); return; }
-    if(ownerPass.length < 6){ toast('Password minimal 6 karakter', true); return; }
-    if(users.some(u => u.email.toLowerCase() === ownerEmail)){
-      toast('Email sudah terdaftar', true); return;
-    }
-
-    // Buat user owner
-    const ownerUser = {
-      id: uid(),
-      email: ownerEmail,
-      password: ownerPass,
-      nama: ownerNama || ownerEmail.split('@')[0],
-      role: 'owner',
-      createdAt: nowISO(),
-    };
-    users.push(ownerUser);
-    saveUsers(users);
-
-    // Buat room
-    const room = {
-      id: uid(),
-      slug, nama,
-      pemilik_id: ownerUser.id,
-      paket,
-      status,
-      mulai_at: todayISO(),
-      berakhir_at: berakhirAt,
-      createdAt: nowISO(),
-    };
-    rooms.push(room);
-    saveRooms(rooms);
-
-    // Buat data room kosong (dengan periode aktif)
-    const roomData = loadRoomData(room.id);
-    if(!roomData.periods.find(p => p.status === 'aktif')){
-      const def = hitungPeriodeDefault();
-      roomData.periods.push({
-        id: uid(),
-        mulai: def.mulai,
-        akhir: def.akhir,
-        status: 'aktif',
-        createdAt: nowISO(),
-        closedAt: null,
-        snapshot: null,
+  try {
+    if(S.editingRoomId){
+      await Rooms.update(S.editingRoomId, {
+        nama, slug, paket, status, berakhir_at: berakhirAt
       });
+      toast('✓ Room diubah');
+    } else {
+      if(!ownerEmail){ toast('Isi email pemilik', true); return; }
+      if(ownerPass.length < 6){ toast('Password minimal 6 karakter', true); return; }
+
+      // Cek email existing
+      const profiles = await Profiles.listAll();
+      if(profiles.some(u => u.email && u.email.toLowerCase() === ownerEmail)){
+        toast('Email sudah terdaftar', true); return;
+      }
+
+      // Bikin user via Supabase Auth
+      $('btnLogin').textContent = 'MEMBUAT...';
+      let newUser;
+      try {
+        newUser = await Auth.createUser(ownerEmail, ownerPass, ownerNama || ownerEmail.split('@')[0]);
+      } catch(e) {
+        toast('Gagal buat user: ' + e.message, true);
+        return;
+      }
+
+      if(!newUser){ toast('Gagal buat user', true); return; }
+
+      // Bikin room
+      const room = await Rooms.create({
+        nama, slug,
+        pemilik_id: newUser.id,
+        paket, status,
+        mulai_at: todayISO(),
+        berakhir_at: berakhirAt,
+      });
+
+      // Tambah member (trigger di SQL juga handle ini, tapi double-safety)
+      try { await Rooms.addMember(room.id, newUser.id, 'owner'); } catch(e){}
+
+      toast('✓ Room dibuat. Owner: ' + ownerEmail);
     }
-    saveRoomData(room.id, roomData);
 
-    // Tambahkan ke members
-    const members = loadMembers();
-    members.push({ room_id: room.id, user_id: ownerUser.id, role: 'owner' });
-    saveMembers(members);
-
-    toast('✓ Room dibuat. Owner: ' + ownerEmail);
+    window.closeModal('roomModal');
+    await loadSuperAdmin();
+  } catch(e){
+    toast('Gagal: ' + e.message, true);
   }
-
-  window.closeModal('roomModal');
-  loadSuperAdmin();
 };
 
-window.toggleRoomStatus = function(id){
-  const rooms = loadRooms();
-  const r = rooms.find(x => x.id === id);
-  if(!r) return;
-  r.status = r.status === 'aktif' ? 'ditangguhkan' : 'aktif';
-  saveRooms(rooms);
-  toast(r.status === 'aktif' ? '✓ Room diaktifkan' : '⚠ Room ditangguhkan');
-  loadSuperAdmin();
+window.toggleRoomStatus = async function(id){
+  try {
+    const r = await Rooms.get(id);
+    if(!r) return;
+    const newStatus = r.status === 'aktif' ? 'ditangguhkan' : 'aktif';
+    await Rooms.update(id, { status: newStatus });
+    toast(newStatus === 'aktif' ? '✓ Room diaktifkan' : '⚠ Room ditangguhkan');
+    await loadSuperAdmin();
+  } catch(e){ toast('Gagal: ' + e.message, true); }
 };
 
-window.deleteRoom = function(id){
-  if(!confirm('Hapus room ini beserta SEMUA data (pekerja, pekerjaan, riwayat)?')) return;
-  const rooms = loadRooms().filter(r => r.id !== id);
-  saveRooms(rooms);
-  localStorage.removeItem(LS.roomData(id));
-  const members = loadMembers().filter(m => m.room_id !== id);
-  saveMembers(members);
-  toast('Room dihapus');
-  loadSuperAdmin();
+window.deleteRoom = async function(id){
+  if(!confirm('Hapus room ini beserta SEMUA data?')) return;
+  try {
+    await Rooms.delete(id);
+    toast('Room dihapus');
+    await loadSuperAdmin();
+  } catch(e){ toast('Gagal: ' + e.message, true); }
 };
 
 window.masukRoom = async function(roomId){
-  const rooms = loadRooms();
-  const room = rooms.find(r => r.id === roomId);
-  if(!room){ toast('Room tidak ditemukan', true); return; }
-  await enterRoom(room);
+  try {
+    const room = await Rooms.get(roomId);
+    if(!room){ toast('Room tidak ditemukan', true); return; }
+    await enterRoom(room);
+  } catch(e){ toast('Gagal masuk room: ' + e.message, true); }
 };
 
 /* ═══════════════════════════════════════════════════
    ROOM PICKER
    ═══════════════════════════════════════════════════ */
 async function loadRoomPicker(){
-  const rooms = loadRooms();
-  const members = loadMembers();
-
-  // Cari room yang bisa diakses user
-  const aksesIds = members.filter(m => m.user_id === S.user.id).map(m => m.room_id);
-  const myRooms = rooms.filter(r => r.pemilik_id === S.user.id || aksesIds.includes(r.id));
-
-  const wrap = $('pickerList');
-  if(myRooms.length === 0){
-    wrap.innerHTML = '';
-    $('pickerEmpty').style.display = 'block';
-    return;
-  }
-  $('pickerEmpty').style.display = 'none';
-  wrap.innerHTML = myRooms.map(r => {
-    const blocked = r.status !== 'aktif';
-    const statusClass = r.status === 'aktif' ? 'aktif' : 'off';
-    return `<div class="card" style="${blocked ? 'opacity:0.6;' : 'cursor:pointer;'}"
-                 ${blocked ? '' : `onclick="enterRoomById('${r.id}')"`}>
-      <div class="card-head">
-        <span class="card-code">/${esc(r.slug)}</span>
-        <span class="badge ${blocked?'dim':'ok'}">${r.status.toUpperCase()}</span>
-      </div>
-      <div class="card-name">${esc(r.nama)}</div>
-      <div class="card-info">Paket: ${esc(r.paket)} • Berakhir: ${r.berakhir_at || '—'}</div>
-      ${blocked ? '<div class="card-info" style="color:var(--danger);">Room tidak aktif. Hubungi Super Admin.</div>' : ''}
-    </div>`;
-  }).join('');
+  try {
+    const rooms = await Rooms.listForUser(S.user.id);
+    const wrap = $('pickerList');
+    if(rooms.length === 0){
+      wrap.innerHTML = '';
+      $('pickerEmpty').style.display = 'block';
+      return;
+    }
+    $('pickerEmpty').style.display = 'none';
+    wrap.innerHTML = rooms.map(r => {
+      const blocked = r.status !== 'aktif';
+      return `<div class="card" style="${blocked ? 'opacity:0.6;' : 'cursor:pointer;'}"
+                   ${blocked ? '' : `onclick="enterRoomById('${r.id}')"`}>
+        <div class="card-head">
+          <span class="card-code">/${esc(r.slug)}</span>
+          <span class="badge ${blocked?'dim':'ok'}">${r.status.toUpperCase()}</span>
+        </div>
+        <div class="card-name">${esc(r.nama)}</div>
+        <div class="card-info">Paket: ${esc(r.paket || 'basic')} • Berakhir: ${r.berakhir_at || '—'}</div>
+        ${blocked ? '<div class="card-info" style="color:var(--danger);">Room tidak aktif. Hubungi Super Admin.</div>' : ''}
+      </div>`;
+    }).join('');
+  } catch(e){ toast('Gagal load room: ' + e.message, true); }
 }
 
 window.enterRoomById = async function(roomId){
-  const rooms = loadRooms();
-  const room = rooms.find(r => r.id === roomId);
-  if(!room){ toast('Room tidak ditemukan', true); return; }
-  await enterRoom(room);
+  try {
+    const room = await Rooms.get(roomId);
+    if(!room){ toast('Room tidak ditemukan', true); return; }
+    await enterRoom(room);
+  } catch(e){ toast('Gagal masuk: ' + e.message, true); }
 };
 
 /* ═══════════════════════════════════════════════════
@@ -475,96 +383,142 @@ async function enterRoom(room){
   if(room.status !== 'aktif'){ toast('Room tidak aktif', true); return; }
 
   S.room = room;
-  const data = loadRoomData(room.id);
+  toast('Loading data...');
 
-  S.workers = data.workers || [];
-  S.jobs = data.jobs || [];
-  S.transactions = data.transactions || [];
-  S.periods = data.periods || [];
-  S.tarif = data.tarif || { tarif: 8000 };
+  try {
+    const data = await loadRoomDataFromSupabase(room.id);
+    S.workers = data.workers || [];
+    S.jobs = (data.jobs || []).map(normalizeJobFromDB);
+    S.transactions = data.transactions || [];
+    S.periods = data.periods || [];
+    S.tarif = data.tarif || { tarif: 8000 };
 
-  // Pastikan ada periode aktif
-  if(!S.periods.find(p => p.status === 'aktif')){
-    const def = hitungPeriodeDefault();
-    S.periods.push({
-      id: uid(),
-      mulai: def.mulai,
-      akhir: def.akhir,
-      status: 'aktif',
-      createdAt: nowISO(),
-      closedAt: null,
-      snapshot: null,
-    });
-    saveCurrentRoomData();
+    // Pastikan ada periode aktif
+    if(!S.periods.find(p => p.status === 'aktif')){
+      const def = hitungPeriodeDefault();
+      const newPeriod = {
+        id: uid(),
+        room_id: room.id,
+        mulai: def.mulai,
+        akhir: def.akhir,
+        status: 'aktif',
+        created_at: nowISO(),
+        closed_at: null,
+        snapshot: null,
+      };
+      await Periods.save(newPeriod);
+      S.periods.push(newPeriod);
+    }
+
+    $('roomTitle').textContent = room.nama.toUpperCase();
+    $('roomSub').textContent = '/' + room.slug + ' • ' + (S.profile?.nama || '');
+
+    showPage('page-room');
+    window.switchTab('dashboard');
+    toast('✓ Masuk room: ' + room.nama);
+  } catch(e){
+    toast('Gagal load data: ' + e.message, true);
   }
-
-  $('roomTitle').textContent = room.nama.toUpperCase();
-  $('roomSub').textContent = '/' + room.slug + ' • ' + (S.profile?.nama || '');
-
-  showPage('page-room');
-  window.switchTab('dashboard');
-  toast('✓ Masuk room: ' + room.nama);
 }
 
-window.exitRoom = function(){
-  // Simpan dulu
-  saveCurrentRoomData();
+// Normalisasi field dari Supabase (snake_case → camelCase)
+function normalizeJobFromDB(j){
+  return {
+    id: j.id,
+    room_id: j.room_id,
+    worker_id: j.worker_id,
+    worker_nama: j.worker_nama,
+    barang: j.barang,
+    jenis: j.jenis,
+    jumlah_ambil: j.jumlah_ambil,
+    tarif: Number(j.tarif),
+    tgl_ambil: j.tgl_ambil,
+    setoran: j.setoran || [],
+    created_at: j.created_at,
+    // Fitur PENDING
+    status: j.status || 'aktif',
+    pending_at: j.pending_at,
+    pending_alasan: j.pending_alasan,
+    pending_dibayar: j.pending_dibayar || false,
+    upah_pending: Number(j.upah_pending || 0),
+    pending_catatan_bayar: j.pending_catatan_bayar,
+  };
+}
+
+window.exitRoom = async function(){
   S.room = null;
   S.workers = []; S.jobs = []; S.transactions = []; S.periods = [];
   S.tarif = { tarif: 8000 };
 
   if(S.profile?.role === 'super_admin'){
-    loadSuperAdmin();
+    await loadSuperAdmin();
     showPage('page-superadmin');
   } else {
-    loadRoomPicker();
+    await loadRoomPicker();
     showPage('page-roompicker');
   }
 };
 
-function saveCurrentRoomData(){
-  if(!S.room) return;
-  saveRoomData(S.room.id, {
-    workers: S.workers,
-    jobs: S.jobs,
-    transactions: S.transactions,
-    periods: S.periods,
-    tarif: S.tarif,
-  });
-}
-
 /* ═══════════════════════════════════════════════════
-   JAIT4 — LOGIC
+   RUmus & DERIVASI
    ═══════════════════════════════════════════════════ */
-
-/* ── Rumus ── */
 function hitungUpah(pcs, tarif){
   if(!pcs || !tarif) return 0;
   return Math.round((pcs/12) * tarif);
 }
 
-/* ── Derivasi Job ── */
 function jobDerivasi(job){
   const totalSetor = (job.setoran || []).reduce((s,x) => s + (x.pcs || 0), 0);
-  const sisaGantungan = Math.max(0, job.jumlahAmbil - totalSetor);
-  const upahHak = hitungUpah(totalSetor, job.tarif);
+  const sisaGantungan = Math.max(0, job.jumlah_ambil - totalSetor);
+
+  // Upah
+  let upahHak;
+  if(job.status === 'pending' && job.pending_dibayar){
+    upahHak = job.upah_pending || 0;
+  } else {
+    upahHak = hitungUpah(totalSetor, job.tarif);
+  }
+
   const totalPanjar = S.transactions
-    .filter(t => t.jobId === job.id && t.jenis === 'panjar')
-    .reduce((s,t) => s + t.jumlah, 0);
+    .filter(t => t.job_id === job.id && t.jenis === 'panjar')
+    .reduce((s,t) => s + Number(t.jumlah || 0), 0);
   const totalBayar = S.transactions
-    .filter(t => t.jobId === job.id && t.jenis === 'pembayaran')
-    .reduce((s,t) => s + t.jumlah, 0);
+    .filter(t => t.job_id === job.id && t.jenis === 'pembayaran')
+    .reduce((s,t) => s + Number(t.jumlah || 0), 0);
   const sisaUpah = Math.max(0, upahHak - totalPanjar - totalBayar);
   const lebihBayar = Math.max(0, totalPanjar + totalBayar - upahHak);
 
+  // Status fisik
   let statusFisik = 'aktif';
-  if(totalSetor > 0 && totalSetor < job.jumlahAmbil) statusFisik = 'gantungan';
-  if(totalSetor >= job.jumlahAmbil) statusFisik = 'selesai';
+  if(job.status === 'pending'){
+    statusFisik = 'pending';
+  } else if(totalSetor > 0 && totalSetor < job.jumlah_ambil){
+    statusFisik = 'gantungan';
+  } else if(totalSetor >= job.jumlah_ambil){
+    statusFisik = 'selesai';
+  }
 
   return { totalSetor, sisaGantungan, upahHak, totalPanjar, totalBayar, sisaUpah, lebihBayar, statusFisik };
 }
 
-/* ── Periode ── */
+function pekerjaGantunganPcs(workerId){
+  return S.jobs
+    .filter(j => j.worker_id === workerId)
+    .reduce((s,j) => s + jobDerivasi(j).sisaGantungan, 0);
+}
+
+function isWorkerTerkunci(workerId){
+  // Terkunci kalau punya job yang BELUM selesai DAN BUKAN pending
+  return S.jobs.some(j =>
+    j.worker_id === workerId &&
+    j.status !== 'selesai' &&
+    j.status !== 'pending'
+  );
+}
+
+/* ═══════════════════════════════════════════════════
+   PERIODE
+   ═══════════════════════════════════════════════════ */
 function periodeAktif(){ return S.periods.find(p => p.status === 'aktif'); }
 
 function hitungPeriodeDefault(){
@@ -605,29 +559,18 @@ function isTglDalamPeriode(isoTgl, periode){
   return tgl >= periode.mulai && tgl <= periode.akhir;
 }
 
-/* ── Filter helpers ── */
 function jobAdaDiPeriode(job, periode){
   if(!periode) return true;
-  if(isTglDalamPeriode(job.tglAmbil, periode)) return true;
+  if(isTglDalamPeriode(job.tgl_ambil, periode)) return true;
   if((job.setoran || []).some(s => isTglDalamPeriode(s.tgl, periode))) return true;
-  if(S.transactions.some(t => t.jobId === job.id && isTglDalamPeriode(t.tgl, periode))) return true;
+  if(S.transactions.some(t => t.job_id === job.id && isTglDalamPeriode(t.tgl, periode))) return true;
   return false;
 }
 
 function txAdaDiPeriode(tx, periode){
   if(!periode) return true;
-  if(tx.periodeId === periode.id) return true;
+  if(tx.periode_id === periode.id) return true;
   return isTglDalamPeriode(tx.tgl, periode);
-}
-
-/* ── Pekerja gantungan ── */
-function pekerjaGantunganPcs(workerId){
-  return S.jobs
-    .filter(j => j.workerId === workerId)
-    .reduce((s,j) => s + jobDerivasi(j).sisaGantungan, 0);
-}
-function isWorkerTerkunci(workerId){
-  return pekerjaGantunganPcs(workerId) > 0;
 }
 
 /* ═══════════════════════════════════════════════════
@@ -654,25 +597,30 @@ function renderDashboard(){
   const tersedia = aktifWorkers.filter(w => !isWorkerTerkunci(w.id));
   const terkunci = aktifWorkers.filter(w => isWorkerTerkunci(w.id));
 
-  let totalAmbil = 0, totalSetor = 0, totalGantungan = 0;
+  let totalAmbil = 0, totalSetor = 0, totalGantungan = 0, totalPending = 0;
   let totalUpahHak = 0, totalPanjar = 0, totalBayar = 0;
 
   jobsPeriode.forEach(j => {
     const d = jobDerivasi(j);
-    if(isTglDalamPeriode(j.tglAmbil, periode)){
-      totalAmbil += j.jumlahAmbil;
-      totalGantungan += d.sisaGantungan;
+    if(isTglDalamPeriode(j.tgl_ambil, periode)){
+      totalAmbil += j.jumlah_ambil;
     }
     const setorPeriode = (j.setoran || [])
       .filter(s => isTglDalamPeriode(s.tgl, periode))
       .reduce((s,x) => s + x.pcs, 0);
     totalSetor += setorPeriode;
     totalUpahHak += hitungUpah(setorPeriode, j.tarif);
+
+    if(j.status === 'pending'){
+      totalPending += d.sisaGantungan;
+    } else if(d.statusFisik === 'gantungan'){
+      totalGantungan += d.sisaGantungan;
+    }
   });
 
   txPeriode.forEach(t => {
-    if(t.jenis === 'panjar') totalPanjar += t.jumlah;
-    if(t.jenis === 'pembayaran') totalBayar += t.jumlah;
+    if(t.jenis === 'panjar') totalPanjar += Number(t.jumlah);
+    if(t.jenis === 'pembayaran') totalBayar += Number(t.jumlah);
   });
 
   const totalSisaUpah = Math.max(0, totalUpahHak - totalPanjar - totalBayar);
@@ -682,7 +630,7 @@ function renderDashboard(){
     <div class="stat-box"><div class="lbl">Tersedia</div><div class="val ok">${tersedia.length}</div></div>
     <div class="stat-box"><div class="lbl">Terkunci</div><div class="val warn">${terkunci.length}</div></div>
     <div class="stat-box"><div class="lbl">Gantungan</div><div class="val warn">${totalGantungan} pcs</div></div>
-    <div class="stat-box"><div class="lbl">Pcs Diambil</div><div class="val">${totalAmbil}</div></div>
+    <div class="stat-box"><div class="lbl">Pending</div><div class="val danger">${totalPending} pcs</div></div>
     <div class="stat-box"><div class="lbl">Pcs Disetor</div><div class="val ok">${totalSetor}</div></div>
     <div class="stat-box"><div class="lbl">Upah Hak</div><div class="val">${rp(totalUpahHak)}</div></div>
     <div class="stat-box"><div class="lbl">Panjar</div><div class="val warn">${rp(totalPanjar)}</div></div>
@@ -695,7 +643,7 @@ function renderDashboard(){
     $('dashTransaksi').innerHTML = '<div class="empty" style="padding:16px;">Belum ada transaksi</div>';
   } else {
     $('dashTransaksi').innerHTML = txs.map(t => {
-      const w = S.workers.find(x => x.id === t.workerId);
+      const w = S.workers.find(x => x.id === t.worker_id);
       return `<div class="card ${t.jenis === 'panjar' ? 'gantung' : 'done'}">
         <div class="card-info">${t.jenis === 'panjar' ? '🟡 Panjar' : '💰 Bayar'} — <b>${esc(w ? w.nama : '—')}</b> — ${rp(t.jumlah)}</div>
         <div class="card-info">${fmtDate(t.tgl)}</div>
@@ -711,6 +659,7 @@ const STATUS_FILTER = [
   { id: 'semua', label: 'Semua' },
   { id: 'aktif', label: 'Aktif' },
   { id: 'gantungan', label: 'Gantungan' },
+  { id: 'pending', label: 'Pending' },
   { id: 'selesai', label: 'Selesai' },
 ];
 
@@ -719,6 +668,7 @@ function renderFilterStatus(){
     <div class="chip ${S.filterStatus === s.id ? 'active' : ''}" onclick="setFilterStatus('${s.id}')">${s.label}</div>
   `).join('');
 }
+
 window.setFilterStatus = function(s){
   S.filterStatus = s;
   renderPekerjaan();
@@ -731,15 +681,20 @@ function renderPekerjaan(){
 
   let list = S.jobs.filter(j => jobAdaDiPeriode(j, periode));
   if(S.filterStatus !== 'semua'){
-    list = list.filter(j => jobDerivasi(j).statusFisik === S.filterStatus);
+    list = list.filter(j => {
+      const d = jobDerivasi(j);
+      if(S.filterStatus === 'pending') return j.status === 'pending';
+      if(S.filterStatus === 'selesai') return j.status === 'selesai' || d.statusFisik === 'selesai';
+      return d.statusFisik === S.filterStatus;
+    });
   }
   if(cari){
     list = list.filter(j =>
-      (j.workerNama || '').toLowerCase().includes(cari) ||
+      (j.worker_nama || '').toLowerCase().includes(cari) ||
       (j.barang || '').toLowerCase().includes(cari)
     );
   }
-  list.sort((a,b) => new Date(b.tglAmbil) - new Date(a.tglAmbil));
+  list.sort((a,b) => new Date(b.tgl_ambil) - new Date(a.tgl_ambil));
 
   const wrap = $('pekerjaanList');
   if(list.length === 0){
@@ -749,40 +704,75 @@ function renderPekerjaan(){
 
   wrap.innerHTML = list.map(j => {
     const d = jobDerivasi(j);
-    const progress = j.jumlahAmbil > 0 ? Math.min(100, (d.totalSetor / j.jumlahAmbil) * 100) : 0;
+    const progress = j.jumlah_ambil > 0 ? Math.min(100, (d.totalSetor / j.jumlah_ambil) * 100) : 0;
 
     let badge = '';
-    if(d.statusFisik === 'aktif') badge = '<span class="badge blue">AKTIF</span>';
-    if(d.statusFisik === 'gantungan') badge = '<span class="badge warn">GANTUNGAN</span>';
-    if(d.statusFisik === 'selesai') badge = '<span class="badge ok">SELESAI</span>';
+    if(j.status === 'pending'){
+      badge = '<span class="badge danger">⏸️ PENDING</span>';
+    } else if(d.statusFisik === 'aktif'){
+      badge = '<span class="badge blue">AKTIF</span>';
+    } else if(d.statusFisik === 'gantungan'){
+      badge = '<span class="badge warn">GANTUNGAN</span>';
+    } else if(d.statusFisik === 'selesai'){
+      badge = '<span class="badge ok">SELESAI</span>';
+    }
 
     let gajiInfo = '';
     if(d.upahHak > 0){
       gajiInfo = `<div class="card-info">💰 Upah: <b>${rp(d.upahHak)}</b> • Panjar: <b>${rp(d.totalPanjar)}</b> • Bayar: <b>${rp(d.totalBayar)}</b></div>`;
       if(d.sisaUpah > 0) gajiInfo += `<div class="card-info" style="color:var(--neon2);">💵 Sisa: <b>${rp(d.sisaUpah)}</b></div>`;
+      if(d.lebihBayar > 0) gajiInfo += `<div class="card-info" style="color:var(--danger);">⚠️ Lebih bayar: <b>${rp(d.lebihBayar)}</b></div>`;
+    }
+
+    let pendingInfo = '';
+    if(j.status === 'pending'){
+      pendingInfo = `
+        <div class="card-info" style="color:var(--danger);">
+          ⏸️ Pending sejak ${fmtDate(j.pending_at)}
+        </div>
+        <div class="card-info" style="color:var(--dim);font-size:.7rem;">
+          Alasan: ${esc(j.pending_alasan || '-')}
+        </div>
+        ${j.pending_dibayar ? `<div class="card-info" style="color:var(--ok);">✅ Sudah dibayar ${rp(j.upah_pending)}</div>` : ''}
+      `;
     }
 
     let actions = '';
-    if(d.statusFisik !== 'selesai'){
-      actions += `<div class="row2btn">
-        <button class="btn btn-done" onclick="openSetor('${j.id}')">📦 SETOR</button>
-        <button class="btn btn-warn" onclick="openPanjar('${j.id}')">🟡 PANJAR</button>
-      </div>`;
+
+    // Kalau AKTIF atau GANTUNGAN (bukan pending, bukan selesai)
+    if(j.status !== 'pending' && j.status !== 'selesai'){
+      if(d.statusFisik !== 'selesai'){
+        actions += `<div class="row2btn">
+          <button class="btn btn-done" onclick="openSetor('${j.id}')">📦 SETOR</button>
+          <button class="btn btn-warn" onclick="openPanjar('${j.id}')">🟡 PANJAR</button>
+        </div>`;
+        actions += `<button class="btn btn-danger" onclick="openPendingDariCard('${j.id}')">⏸️ PENDING</button>`;
+      }
+      if(d.sisaUpah > 0){
+        actions += `<button class="btn btn-primary" onclick="openBayar('${j.id}')">💰 BAYAR ${rp(d.sisaUpah)}</button>`;
+      }
     }
-    if(d.sisaUpah > 0){
-      actions += `<button class="btn btn-primary" onclick="openBayar('${j.id}')">💰 BAYAR ${rp(d.sisaUpah)}</button>`;
+
+    // Kalau PENDING
+    if(j.status === 'pending'){
+      if(!j.pending_dibayar){
+        actions += `<button class="btn btn-warn" onclick="openBayarPending('${j.id}')">💰 BAYAR PENDING</button>`;
+      }
+      actions += `<button class="btn btn-done" onclick="openSetorFisik('${j.id}')">📦 SETOR FISIK</button>`;
     }
+
     actions += `<button class="btn btn-ghost" onclick="openDetailJob('${j.id}')">📄 DETAIL</button>`;
 
-    return `<div class="card ${d.statusFisik === 'selesai' ? 'done' : d.statusFisik === 'gantungan' ? 'gantung' : ''}">
+    return `<div class="card ${j.status === 'pending' ? 'danger' : d.statusFisik === 'selesai' ? 'done' : d.statusFisik === 'gantungan' ? 'gantung' : ''}">
       <div class="card-head">
         <span class="card-code">${esc(j.barang)} ${esc(j.jenis)}</span>
         ${badge}
       </div>
-      <div class="card-name">${esc(j.workerNama)}</div>
-      <div class="card-info">📅 ${fmtDate(j.tglAmbil)} • 🎯 ${j.jumlahAmbil} pcs @ ${rp(j.tarif)}/lusin</div>
+      <div class="card-name">${esc(j.worker_nama)}</div>
+      <div class="card-info">📅 ${fmtDate(j.tgl_ambil)} • 🎯 ${j.jumlah_ambil} pcs @ ${rp(j.tarif)}/lusin</div>
       <div class="card-info">📦 Setor: <b>${d.totalSetor} pcs</b> • Sisa: <b>${d.sisaGantungan} pcs</b></div>
       <div class="progress"><div class="progress-bar" style="width:${progress}%"></div></div>
+      ${pendingInfo}
       ${gajiInfo}
       ${actions}
     </div>`;
@@ -798,24 +788,34 @@ window.openAmbilModal = function(){
     toast('Belum ada pekerja aktif. Tambah dulu di tab LAIN.', true);
     return;
   }
-  if(tersedia.length === 0){
-    toast('Semua pekerja terkunci (gantungan)', true);
+  if(tersedia.length === 0 && terkunci.length === 0){
+    toast('Semua pekerja terkunci', true);
     return;
   }
 
   $('am_worker').innerHTML = '<option value="">— Pilih Pekerja —</option>' +
     tersedia.map(w => `<option value="${w.id}">${esc(w.nama)}</option>`).join('');
 
+  // Info pekerja terkunci + tombol PENDING
   let info = '';
   if(terkunci.length > 0){
-    info = `<div class="alert warn">ℹ️ ${terkunci.length} pekerja terkunci: ${terkunci.map(w => esc(w.nama)).join(', ')}</div>`;
+    info = `<div class="alert danger">
+      ⚠️ <b>${terkunci.length} pekerja terkunci:</b>
+      ${terkunci.map(w => `
+        <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+          <span style="color:var(--txt);font-weight:700;">${esc(w.nama)}</span>
+          <button class="btn btn-sm btn-warn" style="margin:0;padding:5px 12px;font-size:.7rem;" 
+                  onclick="openPendingFromAmbil('${w.id}')">⏸️ PENDING</button>
+        </div>
+      `).join('')}
+    </div>`;
   }
   $('am_workerInfo').innerHTML = info;
 
   $('am_barang').value = '';
   $('am_jenis').value = 'Oblong';
   $('am_jumlah').value = '';
-  $('am_tarif').value = S.tarif.tarif;
+  $('am_tarif').value = S.tarif.tarif || 8000;
   $('am_tgl').value = todayISO();
   $('am_preview').style.display = 'none';
   window.openModal('ambilModal');
@@ -832,7 +832,7 @@ function updateAmbilPreview(){
   } else el.style.display = 'none';
 }
 
-window.simpanAmbil = function(){
+window.simpanAmbil = async function(){
   const workerId = $('am_worker').value;
   const barang = $('am_barang').value.trim();
   const jenis = $('am_jenis').value;
@@ -851,23 +851,29 @@ window.simpanAmbil = function(){
   if(!w.aktif){ toast('Pekerja nonaktif', true); return; }
   if(isWorkerTerkunci(workerId)){ toast('Pekerja masih terkunci', true); return; }
 
-  const job = {
-    id: uid(),
-    workerId,
-    workerNama: w.nama,
-    barang, jenis,
-    jumlahAmbil: jumlah,
-    tarif,
-    tglAmbil: tgl + 'T00:00:00.000+07:00',
-    setoran: [],
-    createdAt: nowISO(),
-  };
+  try {
+    const job = {
+      id: uid(),
+      room_id: S.room.id,
+      worker_id: workerId,
+      worker_nama: w.nama,
+      barang, jenis,
+      jumlah_ambil: jumlah,
+      tarif,
+      tgl_ambil: tgl + 'T00:00:00.000+07:00',
+      setoran: [],
+      status: 'aktif',
+    };
 
-  S.jobs.push(job);
-  saveCurrentRoomData();
-  window.closeModal('ambilModal');
-  toast('✓ Barang diambil oleh ' + w.nama);
-  renderAllRoom();
+    const saved = await Jobs.save(job);
+    S.jobs.push(normalizeJobFromDB(saved));
+
+    window.closeModal('ambilModal');
+    toast('✓ Barang diambil oleh ' + w.nama);
+    renderAllRoom();
+  } catch(e){
+    toast('Gagal simpan: ' + e.message, true);
+  }
 };
 
 /* ── SETOR ── */
@@ -879,9 +885,9 @@ window.openSetor = function(jobId){
 
   S.currentJobId = jobId;
   $('setorInfo').innerHTML = `
-    <div class="info-line"><span>Pekerja</span><span>${esc(j.workerNama)}</span></div>
+    <div class="info-line"><span>Pekerja</span><span>${esc(j.worker_nama)}</span></div>
     <div class="info-line"><span>Barang</span><span>${esc(j.barang)} ${esc(j.jenis)}</span></div>
-    <div class="info-line"><span>Ambil</span><span>${j.jumlahAmbil} pcs</span></div>
+    <div class="info-line"><span>Ambil</span><span>${j.jumlah_ambil} pcs</span></div>
     <div class="info-line"><span>Sudah setor</span><span>${d.totalSetor} pcs</span></div>
     <div class="info-line"><span>Sisa gantungan</span><span style="color:var(--warn);">${d.sisaGantungan} pcs</span></div>
   `;
@@ -907,7 +913,7 @@ function updateSetorAlert(){
   alertEl.innerHTML = `<div class="alert ok">Sisa setelah setor: ${d.sisaGantungan - pcs} pcs</div>`;
 }
 
-window.simpanSetor = function(){
+window.simpanSetor = async function(){
   const j = S.jobs.find(x => x.id === S.currentJobId);
   if(!j){ toast('Job tidak ditemukan', true); return; }
   const d = jobDerivasi(j);
@@ -919,18 +925,47 @@ window.simpanSetor = function(){
   if(pcs > d.sisaGantungan){ toast('Melebihi sisa', true); return; }
   if(!tgl){ toast('Isi tanggal', true); return; }
 
-  j.setoran.push({
-    id: uid(),
-    tgl: tgl + 'T00:00:00.000+07:00',
-    pcs,
-    keterangan: ket,
-    createdAt: nowISO(),
-  });
+  try {
+    j.setoran = j.setoran || [];
+    j.setoran.push({
+      id: uid(),
+      tgl: tgl + 'T00:00:00.000+07:00',
+      pcs,
+      keterangan: ket,
+      created_at: nowISO(),
+    });
 
-  saveCurrentRoomData();
-  window.closeModal('setorModal');
-  toast('✓ Setor ' + pcs + ' pcs');
-  renderAllRoom();
+    // Cek selesai
+    const newTotal = j.setoran.reduce((s,x) => s + x.pcs, 0);
+    if(newTotal >= j.jumlah_ambil){
+      j.status = 'selesai';
+    }
+
+    await Jobs.save({
+      id: j.id,
+      room_id: j.room_id,
+      worker_id: j.worker_id,
+      worker_nama: j.worker_nama,
+      barang: j.barang,
+      jenis: j.jenis,
+      jumlah_ambil: j.jumlah_ambil,
+      tarif: j.tarif,
+      tgl_ambil: j.tgl_ambil,
+      setoran: j.setoran,
+      status: j.status,
+      pending_at: j.pending_at,
+      pending_alasan: j.pending_alasan,
+      pending_dibayar: j.pending_dibayar,
+      upah_pending: j.upah_pending,
+      pending_catatan_bayar: j.pending_catatan_bayar,
+    });
+
+    window.closeModal('setorModal');
+    toast('✓ Setor ' + pcs + ' pcs');
+    renderAllRoom();
+  } catch(e){
+    toast('Gagal: ' + e.message, true);
+  }
 };
 
 /* ── PANJAR ── */
@@ -938,16 +973,16 @@ window.openPanjar = function(jobId){
   const j = S.jobs.find(x => x.id === jobId);
   if(!j){ toast('Job tidak ditemukan', true); return; }
   const d = jobDerivasi(j);
-  const potensiUpah = hitungUpah(j.jumlahAmbil, j.tarif);
+  const potensiUpah = hitungUpah(j.jumlah_ambil, j.tarif);
   const sisaBisaPanjar = Math.max(0, potensiUpah - d.totalPanjar);
 
   if(sisaBisaPanjar <= 0){ toast('Panjar sudah mencapai batas', true); return; }
 
   S.currentJobId = jobId;
   $('panjarInfo').innerHTML = `
-    <div class="info-line"><span>Pekerja</span><span>${esc(j.workerNama)}</span></div>
+    <div class="info-line"><span>Pekerja</span><span>${esc(j.worker_nama)}</span></div>
     <div class="info-line"><span>Barang</span><span>${esc(j.barang)} ${esc(j.jenis)}</span></div>
-    <div class="info-line"><span>Ambil</span><span>${j.jumlahAmbil} pcs</span></div>
+    <div class="info-line"><span>Ambil</span><span>${j.jumlah_ambil} pcs</span></div>
     <div class="info-line"><span>Potensi upah</span><span>${rp(potensiUpah)}</span></div>
     <div class="info-line"><span>Sudah dipanjar</span><span>${rp(d.totalPanjar)}</span></div>
     <div class="info-line"><span>Bisa dipanjar lagi</span><span style="color:var(--warn);">${rp(sisaBisaPanjar)}</span></div>
@@ -963,7 +998,7 @@ function updatePanjarAlert(){
   const j = S.jobs.find(x => x.id === S.currentJobId);
   if(!j) return;
   const d = jobDerivasi(j);
-  const potensiUpah = hitungUpah(j.jumlahAmbil, j.tarif);
+  const potensiUpah = hitungUpah(j.jumlah_ambil, j.tarif);
   const sisaBisa = Math.max(0, potensiUpah - d.totalPanjar);
   const jumlah = parseFloat($('pj_jumlah').value) || 0;
 
@@ -974,11 +1009,11 @@ function updatePanjarAlert(){
   $('pj_alert').innerHTML = `<div class="alert ok">Sisa bisa dipanjar setelah ini: ${rp(sisaBisa - jumlah)}</div>`;
 }
 
-window.simpanPanjar = function(){
+window.simpanPanjar = async function(){
   const j = S.jobs.find(x => x.id === S.currentJobId);
   if(!j){ toast('Job tidak ditemukan', true); return; }
   const d = jobDerivasi(j);
-  const potensiUpah = hitungUpah(j.jumlahAmbil, j.tarif);
+  const potensiUpah = hitungUpah(j.jumlah_ambil, j.tarif);
   const sisaBisa = Math.max(0, potensiUpah - d.totalPanjar);
 
   const jumlah = parseFloat($('pj_jumlah').value);
@@ -991,22 +1026,28 @@ window.simpanPanjar = function(){
 
   const periode = cariPeriodeDariTanggal(tgl);
 
-  S.transactions.push({
-    id: uid(),
-    workerId: j.workerId,
-    jobId: j.id,
-    jenis: 'panjar',
-    jumlah: Math.round(jumlah),
-    tgl: tgl + 'T00:00:00.000+07:00',
-    periodeId: periode.id,
-    keterangan: ket,
-    createdAt: nowISO(),
-  });
+  try {
+    const tx = {
+      id: uid(),
+      room_id: S.room.id,
+      worker_id: j.worker_id,
+      job_id: j.id,
+      jenis: 'panjar',
+      jumlah: Math.round(jumlah),
+      tgl: tgl + 'T00:00:00.000+07:00',
+      periode_id: periode ? periode.id : null,
+      keterangan: ket,
+    };
 
-  saveCurrentRoomData();
-  window.closeModal('panjarModal');
-  toast('✓ Panjar ' + rp(jumlah));
-  renderAllRoom();
+    const saved = await Transactions.save(tx);
+    S.transactions.push(saved);
+
+    window.closeModal('panjarModal');
+    toast('✓ Panjar ' + rp(jumlah));
+    renderAllRoom();
+  } catch(e){
+    toast('Gagal: ' + e.message, true);
+  }
 };
 
 /* ── BAYAR ── */
@@ -1019,7 +1060,7 @@ window.openBayar = function(jobId){
 
   S.currentJobId = jobId;
   $('bayarInfo').innerHTML = `
-    <div class="info-line"><span>Pekerja</span><span>${esc(j.workerNama)}</span></div>
+    <div class="info-line"><span>Pekerja</span><span>${esc(j.worker_nama)}</span></div>
     <div class="info-line"><span>Upah hak</span><span>${rp(d.upahHak)}</span></div>
     <div class="info-line"><span>Panjar</span><span>${rp(d.totalPanjar)}</span></div>
     <div class="info-line"><span>Bayar sebelumnya</span><span>${rp(d.totalBayar)}</span></div>
@@ -1047,7 +1088,7 @@ function updateBayarAlert(){
   alertEl.innerHTML = `<div class="alert ok">Sisa upah setelah ini: ${rp(d.sisaUpah - jumlah)}</div>`;
 }
 
-window.simpanBayar = function(){
+window.simpanBayar = async function(){
   const j = S.jobs.find(x => x.id === S.currentJobId);
   if(!j){ toast('Job tidak ditemukan', true); return; }
   const d = jobDerivasi(j);
@@ -1061,38 +1102,334 @@ window.simpanBayar = function(){
 
   const periode = cariPeriodeDariTanggal(tgl);
 
-  S.transactions.push({
-    id: uid(),
-    workerId: j.workerId,
-    jobId: j.id,
-    jenis: 'pembayaran',
-    jumlah: Math.round(jumlah),
-    tgl: tgl + 'T00:00:00.000+07:00',
-    periodeId: periode.id,
-    keterangan: ket,
-    createdAt: nowISO(),
-  });
+  try {
+    const tx = {
+      id: uid(),
+      room_id: S.room.id,
+      worker_id: j.worker_id,
+      job_id: j.id,
+      jenis: 'pembayaran',
+      jumlah: Math.round(jumlah),
+      tgl: tgl + 'T00:00:00.000+07:00',
+      periode_id: periode ? periode.id : null,
+      keterangan: ket,
+    };
 
-  saveCurrentRoomData();
-  window.closeModal('bayarModal');
-  toast('✓ Bayar ' + rp(jumlah));
-  renderAllRoom();
+    const saved = await Transactions.save(tx);
+    S.transactions.push(saved);
+
+    window.closeModal('bayarModal');
+    toast('✓ Bayar ' + rp(jumlah));
+    renderAllRoom();
+  } catch(e){
+    toast('Gagal: ' + e.message, true);
+  }
 };
 
-/* ── DETAIL JOB ── */
+/* ═══════════════════════════════════════════════════
+   FITUR PENDING
+   ═══════════════════════════════════════════════════ */
+
+window.openPendingFromAmbil = function(workerId){
+  const w = S.workers.find(x => x.id === workerId);
+  if(!w){ toast('Pekerja tidak ditemukan', true); return; }
+
+  const jobAktif = S.jobs.find(j =>
+    j.worker_id === workerId &&
+    j.status !== 'selesai' &&
+    j.status !== 'pending'
+  );
+
+  if(!jobAktif){
+    toast('Tidak ada job aktif untuk ' + w.nama, true);
+    return;
+  }
+
+  S.currentJobId = jobAktif.id;
+
+  const totalSetor = (jobAktif.setoran || []).reduce((s,x) => s + (x.pcs || 0), 0);
+  const sisa = jobAktif.jumlah_ambil - totalSetor;
+
+  $('pendingInfo').innerHTML = `
+    <div class="info-line"><span>Pekerja</span><span>${esc(w.nama)}</span></div>
+    <div class="info-line"><span>Barang</span><span>${esc(jobAktif.barang)} ${esc(jobAktif.jenis)}</span></div>
+    <div class="info-line"><span>Ambil</span><span>${jobAktif.jumlah_ambil} pcs</span></div>
+    <div class="info-line"><span>Setor</span><span>${totalSetor} pcs</span></div>
+    <div class="info-line"><span>Sisa</span><span style="color:var(--danger);">${sisa} pcs</span></div>
+  `;
+
+  $('pendingAlasan').value = '';
+  window.openModal('pendingModal');
+};
+
+window.openPendingDariCard = function(jobId){
+  const job = S.jobs.find(j => j.id === jobId);
+  if(!job){ toast('Job tidak ditemukan', true); return; }
+
+  S.currentJobId = jobId;
+
+  const totalSetor = (job.setoran || []).reduce((s,x) => s + (x.pcs || 0), 0);
+  const sisa = job.jumlah_ambil - totalSetor;
+
+  $('pendingInfo').innerHTML = `
+    <div class="info-line"><span>Pekerja</span><span>${esc(job.worker_nama)}</span></div>
+    <div class="info-line"><span>Barang</span><span>${esc(job.barang)} ${esc(job.jenis)}</span></div>
+    <div class="info-line"><span>Ambil</span><span>${job.jumlah_ambil} pcs</span></div>
+    <div class="info-line"><span>Setor</span><span>${totalSetor} pcs</span></div>
+    <div class="info-line"><span>Sisa</span><span style="color:var(--danger);">${sisa} pcs</span></div>
+  `;
+
+  $('pendingAlasan').value = '';
+  window.openModal('pendingModal');
+};
+
+window.konfirmasiPending = async function(){
+  const alasan = $('pendingAlasan').value.trim();
+  if(!alasan){ toast('Isi alasan pending', true); return; }
+
+  const job = S.jobs.find(j => j.id === S.currentJobId);
+  if(!job){ toast('Job tidak ditemukan', true); return; }
+
+  job.status = 'pending';
+  job.pending_at = nowISO();
+  job.pending_alasan = alasan;
+  job.pending_dibayar = false;
+  job.upah_pending = 0;
+  job.pending_catatan_bayar = '';
+
+  try {
+    await Jobs.save({
+      id: job.id,
+      room_id: job.room_id,
+      worker_id: job.worker_id,
+      worker_nama: job.worker_nama,
+      barang: job.barang,
+      jenis: job.jenis,
+      jumlah_ambil: job.jumlah_ambil,
+      tarif: job.tarif,
+      tgl_ambil: job.tgl_ambil,
+      setoran: job.setoran,
+      status: job.status,
+      pending_at: job.pending_at,
+      pending_alasan: job.pending_alasan,
+      pending_dibayar: job.pending_dibayar,
+      upah_pending: job.upah_pending,
+      pending_catatan_bayar: job.pending_catatan_bayar,
+    });
+
+    window.closeModal('pendingModal');
+    window.closeModal('ambilModal');
+    toast('✓ ' + job.worker_nama + ' dipending');
+
+    // Auto refresh modal ambil barang
+    setTimeout(() => {
+      window.openAmbilModal();
+    }, 400);
+  } catch(e){
+    toast('Gagal pending: ' + e.message, true);
+  }
+};
+
+window.openBayarPending = function(jobId){
+  const job = S.jobs.find(j => j.id === jobId);
+  if(!job){ toast('Job tidak ditemukan', true); return; }
+  if(job.status !== 'pending'){ toast('Job bukan pending', true); return; }
+  if(job.pending_dibayar){ toast('Pending sudah dibayar', true); return; }
+
+  S.currentJobId = jobId;
+
+  const totalSetor = (job.setoran || []).reduce((s,x) => s + (x.pcs || 0), 0);
+  const sisa = job.jumlah_ambil - totalSetor;
+
+  $('bayarPendingInfo').innerHTML = `
+    <div class="info-line"><span>Pekerja</span><span>${esc(job.worker_nama)}</span></div>
+    <div class="info-line"><span>Barang</span><span>${esc(job.barang)} ${esc(job.jenis)}</span></div>
+    <div class="info-line"><span>Ambil</span><span>${job.jumlah_ambil} pcs</span></div>
+    <div class="info-line"><span>Setor</span><span>${totalSetor} pcs</span></div>
+    <div class="info-line"><span>Sisa</span><span style="color:var(--danger);">${sisa} pcs</span></div>
+    <div class="info-line"><span>Alasan pending</span><span>${esc(job.pending_alasan || '-')}</span></div>
+  `;
+
+  const upahDefault = Math.round((job.jumlah_ambil / 12) * job.tarif);
+  $('bp_jumlah').value = upahDefault;
+  $('bp_catatan').value = 'Sudah dibayar, menunggu setor fisik';
+
+  window.openModal('bayarPendingModal');
+};
+
+window.konfirmasiBayarPending = async function(){
+  const job = S.jobs.find(j => j.id === S.currentJobId);
+  if(!job){ toast('Job tidak ditemukan', true); return; }
+  if(job.pending_dibayar){ toast('Sudah dibayar', true); return; }
+
+  const jumlah = parseFloat($('bp_jumlah').value);
+  const catatan = $('bp_catatan').value.trim();
+
+  if(!jumlah || jumlah <= 0){ toast('Nominal tidak valid', true); return; }
+  if(!catatan){ toast('Isi catatan', true); return; }
+
+  job.pending_dibayar = true;
+  job.upah_pending = Math.round(jumlah);
+  job.pending_catatan_bayar = catatan;
+
+  // Catat transaksi
+  const periode = periodeAktif();
+
+  try {
+    const tx = {
+      id: uid(),
+      room_id: S.room.id,
+      worker_id: job.worker_id,
+      job_id: job.id,
+      jenis: 'pembayaran',
+      jumlah: Math.round(jumlah),
+      tgl: nowISO(),
+      periode_id: periode ? periode.id : null,
+      keterangan: 'Bayar pending: ' + catatan,
+    };
+
+    const savedTx = await Transactions.save(tx);
+    S.transactions.push(savedTx);
+
+    await Jobs.save({
+      id: job.id,
+      room_id: job.room_id,
+      worker_id: job.worker_id,
+      worker_nama: job.worker_nama,
+      barang: job.barang,
+      jenis: job.jenis,
+      jumlah_ambil: job.jumlah_ambil,
+      tarif: job.tarif,
+      tgl_ambil: job.tgl_ambil,
+      setoran: job.setoran,
+      status: job.status,
+      pending_at: job.pending_at,
+      pending_alasan: job.pending_alasan,
+      pending_dibayar: job.pending_dibayar,
+      upah_pending: job.upah_pending,
+      pending_catatan_bayar: job.pending_catatan_bayar,
+    });
+
+    window.closeModal('bayarPendingModal');
+    toast('✓ Bayar pending ' + rp(jumlah));
+    renderAllRoom();
+  } catch(e){
+    toast('Gagal: ' + e.message, true);
+  }
+};
+
+window.openSetorFisik = function(jobId){
+  const job = S.jobs.find(j => j.id === jobId);
+  if(!job){ toast('Job tidak ditemukan', true); return; }
+  if(job.status !== 'pending'){ toast('Job bukan pending', true); return; }
+
+  S.currentJobId = jobId;
+
+  const totalSetor = (job.setoran || []).reduce((s,x) => s + (x.pcs || 0), 0);
+  const sisa = job.jumlah_ambil - totalSetor;
+
+  $('setorFisikInfo').innerHTML = `
+    <div class="info-line"><span>Pekerja</span><span>${esc(job.worker_nama)}</span></div>
+    <div class="info-line"><span>Barang</span><span>${esc(job.barang)} ${esc(job.jenis)}</span></div>
+    <div class="info-line"><span>Ambil</span><span>${job.jumlah_ambil} pcs</span></div>
+    <div class="info-line"><span>Setor sebelumnya</span><span>${totalSetor} pcs</span></div>
+    <div class="info-line"><span>Sisa</span><span style="color:var(--danger);">${sisa} pcs</span></div>
+  `;
+
+  $('sf_pcs').value = sisa;
+  $('sf_alert').innerHTML = '';
+  updateSetorFisikAlert();
+  window.openModal('setorFisikModal');
+};
+
+function updateSetorFisikAlert(){
+  const job = S.jobs.find(j => j.id === S.currentJobId);
+  if(!job) return;
+  const totalSetor = (job.setoran || []).reduce((s,x) => s + (x.pcs || 0), 0);
+  const sisa = job.jumlah_ambil - totalSetor;
+  const pcs = parseInt($('sf_pcs').value) || 0;
+
+  if(pcs <= 0){
+    $('sf_alert').innerHTML = '<div class="alert danger">Isi jumlah > 0</div>';
+    return;
+  }
+  if(pcs > sisa){
+    $('sf_alert').innerHTML = `<div class="alert danger">Melebihi sisa (${sisa} pcs)</div>`;
+    return;
+  }
+  $('sf_alert').innerHTML = `<div class="alert ok">Sisa setelah setor: ${sisa - pcs} pcs</div>`;
+}
+
+window.konfirmasiSetorFisik = async function(){
+  const job = S.jobs.find(j => j.id === S.currentJobId);
+  if(!job){ toast('Job tidak ditemukan', true); return; }
+
+  const pcs = parseInt($('sf_pcs').value);
+  if(!pcs || pcs <= 0){ toast('Jumlah tidak valid', true); return; }
+
+  const totalSetor = (job.setoran || []).reduce((s,x) => s + (x.pcs || 0), 0);
+  const sisa = job.jumlah_ambil - totalSetor;
+
+  if(pcs > sisa){ toast('Melebihi sisa', true); return; }
+
+  job.setoran = job.setoran || [];
+  job.setoran.push({
+    id: uid(),
+    tgl: nowISO(),
+    pcs,
+    keterangan: 'Setor fisik (pending)',
+    created_at: nowISO(),
+  });
+
+  const newTotal = job.setoran.reduce((s,x) => s + x.pcs, 0);
+  if(newTotal >= job.jumlah_ambil){
+    job.status = 'selesai';
+  }
+
+  try {
+    await Jobs.save({
+      id: job.id,
+      room_id: job.room_id,
+      worker_id: job.worker_id,
+      worker_nama: job.worker_nama,
+      barang: job.barang,
+      jenis: job.jenis,
+      jumlah_ambil: job.jumlah_ambil,
+      tarif: job.tarif,
+      tgl_ambil: job.tgl_ambil,
+      setoran: job.setoran,
+      status: job.status,
+      pending_at: job.pending_at,
+      pending_alasan: job.pending_alasan,
+      pending_dibayar: job.pending_dibayar,
+      upah_pending: job.upah_pending,
+      pending_catatan_bayar: job.pending_catatan_bayar,
+    });
+
+    window.closeModal('setorFisikModal');
+    toast('✓ Setor ' + pcs + ' pcs' + (job.status === 'selesai' ? ' — SELESAI' : ''));
+    renderAllRoom();
+  } catch(e){
+    toast('Gagal: ' + e.message, true);
+  }
+};
+
+/* ═══════════════════════════════════════════════════
+   DETAIL JOB
+   ═══════════════════════════════════════════════════ */
 window.openDetailJob = function(jobId){
   const j = S.jobs.find(x => x.id === jobId);
   if(!j) return;
   const d = jobDerivasi(j);
 
-  const setoranHtml = j.setoran.length === 0
+  const setoranHtml = (j.setoran || []).length === 0
     ? '<div class="card-info">Belum ada setoran</div>'
     : j.setoran.map(s => `
       <div class="info-line"><span>${fmtDate(s.tgl)}</span><span>${s.pcs} pcs</span></div>
       ${s.keterangan ? `<div class="card-info" style="font-size:.7rem;">📝 ${esc(s.keterangan)}</div>` : ''}
     `).join('');
 
-  const txs = S.transactions.filter(t => t.jobId === j.id);
+  const txs = S.transactions.filter(t => t.job_id === j.id);
   const txHtml = txs.length === 0
     ? '<div class="card-info">Belum ada transaksi</div>'
     : txs.map(t => `
@@ -1102,24 +1439,38 @@ window.openDetailJob = function(jobId){
       </div>
     `).join('');
 
+  let pendingBlock = '';
+  if(j.status === 'pending'){
+    pendingBlock = `
+      <div class="divider"></div>
+      <div class="card-info" style="color:var(--danger);"><b>⏸️ STATUS PENDING</b></div>
+      <div class="info-line"><span>Sejak</span><span>${fmtDate(j.pending_at)}</span></div>
+      <div class="info-line"><span>Alasan</span><span>${esc(j.pending_alasan || '-')}</span></div>
+      ${j.pending_dibayar ? `
+        <div class="info-line"><span>Dibayar</span><span style="color:var(--ok);">${rp(j.upah_pending)}</span></div>
+        <div class="info-line"><span>Catatan</span><span>${esc(j.pending_catatan_bayar || '-')}</span></div>
+      ` : ''}
+    `;
+  }
+
   $('dj_title').textContent = j.barang + ' ' + j.jenis;
   $('dj_content').innerHTML = `
-    <div class="info-line"><span>Pekerja</span><span>${esc(j.workerNama)}</span></div>
-    <div class="info-line"><span>Tanggal ambil</span><span>${fmtDate(j.tglAmbil)}</span></div>
-    <div class="info-line"><span>Ambil</span><span>${j.jumlahAmbil} pcs</span></div>
+    <div class="info-line"><span>Pekerja</span><span>${esc(j.worker_nama)}</span></div>
+    <div class="info-line"><span>Tanggal ambil</span><span>${fmtDate(j.tgl_ambil)}</span></div>
+    <div class="info-line"><span>Ambil</span><span>${j.jumlah_ambil} pcs</span></div>
     <div class="info-line"><span>Tarif</span><span>${rp(j.tarif)}/lusin</span></div>
+    ${pendingBlock}
     <div class="divider"></div>
     <div class="card-info"><b>SETORAN</b></div>
     ${setoranHtml}
     <div class="info-line total"><span>Total setor</span><span>${d.totalSetor} pcs</span></div>
-    <div class="info-line"><span>Sisa gantungan</span><span style="color:var(--warn);">${d.sisaGantungan} pcs</span></div>
+    <div class="info-line"><span>Sisa</span><span style="color:var(--warn);">${d.sisaGantungan} pcs</span></div>
     <div class="divider"></div>
     <div class="card-info"><b>UPAH</b></div>
     <div class="info-line"><span>Upah hak</span><span>${rp(d.upahHak)}</span></div>
     <div class="info-line"><span>Panjar</span><span>${rp(d.totalPanjar)}</span></div>
     <div class="info-line"><span>Bayar</span><span>${rp(d.totalBayar)}</span></div>
     <div class="info-line total"><span>Sisa upah</span><span>${rp(d.sisaUpah)}</span></div>
-    ${d.lebihBayar > 0 ? `<div class="alert danger">⚠️ Lebih bayar: ${rp(d.lebihBayar)}</div>` : ''}
     <div class="divider"></div>
     <div class="card-info"><b>TRANSAKSI</b></div>
     ${txHtml}
@@ -1140,29 +1491,26 @@ function renderFisik(){
 
   const jobsPeriode = S.jobs.filter(j => jobAdaDiPeriode(j, periode));
 
-  let totalAmbil = 0, totalSetor = 0, totalSisa = 0;
+  let totalAmbil = 0, totalSetor = 0, totalSisa = 0, totalPending = 0;
   jobsPeriode.forEach(j => {
     const d = jobDerivasi(j);
-    if(isTglDalamPeriode(j.tglAmbil, periode)) totalAmbil += j.jumlahAmbil;
+    if(isTglDalamPeriode(j.tgl_ambil, periode)) totalAmbil += j.jumlah_ambil;
     const setorPeriode = (j.setoran || [])
       .filter(s => isTglDalamPeriode(s.tgl, periode))
       .reduce((s,x) => s + x.pcs, 0);
     totalSetor += setorPeriode;
-    if(isTglDalamPeriode(j.tglAmbil, periode)) totalSisa += d.sisaGantungan;
+    if(j.status === 'pending') totalPending += d.sisaGantungan;
+    else if(isTglDalamPeriode(j.tgl_ambil, periode)) totalSisa += d.sisaGantungan;
   });
-
-  const jobAktifPeriode = jobsPeriode.filter(j =>
-    jobDerivasi(j).statusFisik !== 'selesai' && isTglDalamPeriode(j.tglAmbil, periode)
-  );
 
   $('fisikStats').innerHTML = `
     <div class="stat-box"><div class="lbl">Diambil</div><div class="val">${totalAmbil} pcs</div></div>
     <div class="stat-box"><div class="lbl">Disetor</div><div class="val ok">${totalSetor} pcs</div></div>
     <div class="stat-box"><div class="lbl">Gantungan</div><div class="val warn">${totalSisa} pcs</div></div>
-    <div class="stat-box"><div class="lbl">Job Aktif</div><div class="val">${jobAktifPeriode.length}</div></div>
+    <div class="stat-box"><div class="lbl">Pending</div><div class="val danger">${totalPending} pcs</div></div>
   `;
 
-  const list = [...jobsPeriode].sort((a,b) => new Date(b.tglAmbil) - new Date(a.tglAmbil));
+  const list = [...jobsPeriode].sort((a,b) => new Date(b.tgl_ambil) - new Date(a.tgl_ambil));
   if(list.length === 0){
     $('fisikTbody').innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--dim);">Belum ada data</td></tr>';
     return;
@@ -1171,15 +1519,16 @@ function renderFisik(){
   $('fisikTbody').innerHTML = list.map(j => {
     const d = jobDerivasi(j);
     let statusBadge = '';
-    if(d.statusFisik === 'aktif') statusBadge = '<span class="badge blue">AKTIF</span>';
-    if(d.statusFisik === 'gantungan') statusBadge = '<span class="badge warn">GANTUNGAN</span>';
-    if(d.statusFisik === 'selesai') statusBadge = '<span class="badge ok">SELESAI</span>';
+    if(j.status === 'pending') statusBadge = '<span class="badge danger">PENDING</span>';
+    else if(d.statusFisik === 'aktif') statusBadge = '<span class="badge blue">AKTIF</span>';
+    else if(d.statusFisik === 'gantungan') statusBadge = '<span class="badge warn">GANTUNGAN</span>';
+    else if(d.statusFisik === 'selesai') statusBadge = '<span class="badge ok">SELESAI</span>';
 
     return `<tr>
-      <td>${fmtDate(j.tglAmbil)}</td>
-      <td>${esc(j.workerNama)}</td>
+      <td>${fmtDate(j.tgl_ambil)}</td>
+      <td>${esc(j.worker_nama)}</td>
       <td>${esc(j.barang)} ${esc(j.jenis)}</td>
-      <td>${j.jumlahAmbil}</td>
+      <td>${j.jumlah_ambil}</td>
       <td>${d.totalSetor}</td>
       <td style="color:var(--warn);">${d.sisaGantungan}</td>
       <td>${statusBadge}</td>
@@ -1207,20 +1556,24 @@ function renderPayroll(){
 
   const byWorker = {};
   jobsPeriode.forEach(j => {
-    if(wFilter && j.workerId !== wFilter) return;
+    if(wFilter && j.worker_id !== wFilter) return;
     const setorPeriode = (j.setoran || [])
       .filter(s => isTglDalamPeriode(s.tgl, periode))
       .reduce((s,x) => s + x.pcs, 0);
-    if(setorPeriode === 0) return;
 
-    const upahHak = hitungUpah(setorPeriode, j.tarif);
-    const panjarJob = txPeriode.filter(t => t.jobId === j.id && t.jenis === 'panjar').reduce((s,t) => s + t.jumlah, 0);
-    const bayarJob = txPeriode.filter(t => t.jobId === j.id && t.jenis === 'pembayaran').reduce((s,t) => s + t.jumlah, 0);
+    const upahSetor = hitungUpah(setorPeriode, j.tarif);
+    const upahPending = (j.status === 'pending' && j.pending_dibayar) ? (j.upah_pending || 0) : 0;
+    const upahTotal = Math.max(upahSetor, upahPending);
 
-    if(!byWorker[j.workerId]) byWorker[j.workerId] = { nama: j.workerNama, upahHak: 0, panjar: 0, bayar: 0 };
-    byWorker[j.workerId].upahHak += upahHak;
-    byWorker[j.workerId].panjar += panjarJob;
-    byWorker[j.workerId].bayar += bayarJob;
+    if(upahTotal === 0 && setorPeriode === 0) return;
+
+    const panjarJob = txPeriode.filter(t => t.job_id === j.id && t.jenis === 'panjar').reduce((s,t) => s + Number(t.jumlah), 0);
+    const bayarJob = txPeriode.filter(t => t.job_id === j.id && t.jenis === 'pembayaran').reduce((s,t) => s + Number(t.jumlah), 0);
+
+    if(!byWorker[j.worker_id]) byWorker[j.worker_id] = { nama: j.worker_nama, upahHak: 0, panjar: 0, bayar: 0 };
+    byWorker[j.worker_id].upahHak += upahTotal;
+    byWorker[j.worker_id].panjar += panjarJob;
+    byWorker[j.worker_id].bayar += bayarJob;
   });
 
   Object.values(byWorker).forEach(w => {
@@ -1246,14 +1599,14 @@ function renderPayroll(){
   }
 
   let txs = [...txPeriode];
-  if(wFilter) txs = txs.filter(t => t.workerId === wFilter);
+  if(wFilter) txs = txs.filter(t => t.worker_id === wFilter);
   txs.sort((a,b) => new Date(b.tgl) - new Date(a.tgl));
 
   if(txs.length === 0){
     $('transaksiList').innerHTML = '<div class="empty" style="padding:16px;">Belum ada transaksi</div>';
   } else {
     $('transaksiList').innerHTML = txs.slice(0,30).map(t => {
-      const w = S.workers.find(x => x.id === t.workerId);
+      const w = S.workers.find(x => x.id === t.worker_id);
       return `<div class="card">
         <div class="card-info">${t.jenis === 'panjar' ? '🟡 Panjar' : '💰 Bayar'} — <b>${esc(w ? w.nama : '—')}</b> — ${rp(t.jumlah)}</div>
         <div class="card-info">${fmtDate(t.tgl)}${t.keterangan ? ' • ' + esc(t.keterangan) : ''}</div>
@@ -1267,15 +1620,17 @@ window.lihatSlip = function(workerId){
   const w = S.workers.find(x => x.id === workerId);
   if(!w) return;
 
-  const jobsPeriode = S.jobs.filter(j => j.workerId === workerId && jobAdaDiPeriode(j, periode));
+  const jobsPeriode = S.jobs.filter(j => j.worker_id === workerId && jobAdaDiPeriode(j, periode));
   if(jobsPeriode.length === 0){ toast('Belum ada pekerjaan', true); return; }
 
   let totalHak = 0, totalPanjar = 0, totalBayar = 0;
   const rows = jobsPeriode.map(j => {
     const setorPeriode = (j.setoran || []).filter(s => isTglDalamPeriode(s.tgl, periode)).reduce((s,x) => s + x.pcs, 0);
-    const upahHak = hitungUpah(setorPeriode, j.tarif);
-    const panjar = S.transactions.filter(t => t.jobId === j.id && t.jenis === 'panjar' && txAdaDiPeriode(t, periode)).reduce((s,t) => s + t.jumlah, 0);
-    const bayar = S.transactions.filter(t => t.jobId === j.id && t.jenis === 'pembayaran' && txAdaDiPeriode(t, periode)).reduce((s,t) => s + t.jumlah, 0);
+    const upahSetor = hitungUpah(setorPeriode, j.tarif);
+    const upahPending = (j.status === 'pending' && j.pending_dibayar) ? (j.upah_pending || 0) : 0;
+    const upahHak = Math.max(upahSetor, upahPending);
+    const panjar = S.transactions.filter(t => t.job_id === j.id && t.jenis === 'panjar' && txAdaDiPeriode(t, periode)).reduce((s,t) => s + Number(t.jumlah), 0);
+    const bayar = S.transactions.filter(t => t.job_id === j.id && t.jenis === 'pembayaran' && txAdaDiPeriode(t, periode)).reduce((s,t) => s + Number(t.jumlah), 0);
     totalHak += upahHak; totalPanjar += panjar; totalBayar += bayar;
     return { j, setorPeriode, upahHak, panjar, bayar };
   });
@@ -1304,14 +1659,16 @@ window.cetakSlip = function(workerId){
   const w = S.workers.find(x => x.id === workerId);
   if(!w) return;
 
-  const jobsPeriode = S.jobs.filter(j => j.workerId === workerId && jobAdaDiPeriode(j, periode));
+  const jobsPeriode = S.jobs.filter(j => j.worker_id === workerId && jobAdaDiPeriode(j, periode));
   if(jobsPeriode.length === 0){ toast('Belum ada pekerjaan', true); return; }
 
   const rows = jobsPeriode.map(j => {
     const setorPeriode = (j.setoran || []).filter(s => isTglDalamPeriode(s.tgl, periode)).reduce((s,x) => s + x.pcs, 0);
-    const upahHak = hitungUpah(setorPeriode, j.tarif);
-    const panjar = S.transactions.filter(t => t.jobId === j.id && t.jenis === 'panjar' && txAdaDiPeriode(t, periode)).reduce((s,t) => s + t.jumlah, 0);
-    const bayar = S.transactions.filter(t => t.jobId === j.id && t.jenis === 'pembayaran' && txAdaDiPeriode(t, periode)).reduce((s,t) => s + t.jumlah, 0);
+    const upahSetor = hitungUpah(setorPeriode, j.tarif);
+    const upahPending = (j.status === 'pending' && j.pending_dibayar) ? (j.upah_pending || 0) : 0;
+    const upahHak = Math.max(upahSetor, upahPending);
+    const panjar = S.transactions.filter(t => t.job_id === j.id && t.jenis === 'panjar' && txAdaDiPeriode(t, periode)).reduce((s,t) => s + Number(t.jumlah), 0);
+    const bayar = S.transactions.filter(t => t.job_id === j.id && t.jenis === 'pembayaran' && txAdaDiPeriode(t, periode)).reduce((s,t) => s + Number(t.jumlah), 0);
     return { j, setorPeriode, upahHak, panjar, bayar };
   });
 
@@ -1343,7 +1700,7 @@ window.cetakSlip = function(workerId){
         ${rows.map((r, idx) => `
           <tr>
             <td>${idx+1}</td>
-            <td>${esc(r.j.barang)} ${esc(r.j.jenis)}</td>
+            <td>${esc(r.j.barang)} ${esc(r.j.jenis)}${r.j.status === 'pending' ? ' ⏸️' : ''}</td>
             <td class="right">${r.setorPeriode}</td>
             <td class="right">${fmtNum(r.setorPeriode/12)}</td>
             <td class="right">${r.j.tarif.toLocaleString('id-ID')}</td>
@@ -1389,6 +1746,8 @@ function renderWorkers(){
   $('workerList').innerHTML = S.workers.map(w => {
     const terkunci = isWorkerTerkunci(w.id);
     const gantunganPcs = pekerjaGantunganPcs(w.id);
+    const pendingCount = S.jobs.filter(j => j.worker_id === w.id && j.status === 'pending').length;
+
     let badge = w.aktif
       ? (terkunci ? `<span class="badge warn">${gantunganPcs} pcs gantungan</span>` : '<span class="badge ok">TERSEDIA</span>')
       : '<span class="badge dim">NONAKTIF</span>';
@@ -1396,6 +1755,7 @@ function renderWorkers(){
     return `<div class="card" style="padding:9px 11px;">
       <div class="card-name" style="font-size:.92rem;">${esc(w.nama)}</div>
       <div class="card-info">${w.telepon ? '📞 ' + esc(w.telepon) : '(tanpa telepon)'} ${badge}</div>
+      ${pendingCount > 0 ? `<div class="card-info" style="color:var(--danger);">⏸️ ${pendingCount} job pending</div>` : ''}
       <div class="row2btn" style="margin-top:6px;">
         <button class="btn btn-ghost btn-sm" onclick="editWorker('${w.id}')">UBAH</button>
         <button class="btn btn-danger btn-sm" onclick="hapusWorker('${w.id}')">HAPUS</button>
@@ -1424,36 +1784,56 @@ window.editWorker = function(id){
   window.openModal('workerModal');
 };
 
-window.simpanWorker = function(){
+window.simpanWorker = async function(){
   const nama = $('wm_nama').value.trim();
   const telepon = $('wm_telepon').value.trim();
   const aktif = $('wm_aktif').value === 'true';
 
   if(!nama){ toast('Isi nama', true); return; }
 
-  if(S.editingWorkerId){
-    const w = S.workers.find(x => x.id === S.editingWorkerId);
-    if(w){ w.nama = nama; w.telepon = telepon; w.aktif = aktif; }
-  } else {
-    S.workers.push({ id: uid(), nama, telepon, aktif, createdAt: nowISO() });
+  try {
+    if(S.editingWorkerId){
+      const w = S.workers.find(x => x.id === S.editingWorkerId);
+      w.nama = nama;
+      w.telepon = telepon;
+      w.aktif = aktif;
+      await Workers.save({
+        id: w.id,
+        room_id: S.room.id,
+        nama, telepon, aktif,
+      });
+    } else {
+      const w = {
+        id: uid(),
+        room_id: S.room.id,
+        nama, telepon, aktif,
+      };
+      const saved = await Workers.save(w);
+      S.workers.push(saved);
+    }
+    window.closeModal('workerModal');
+    toast('✓ Tersimpan');
+    renderAllRoom();
+  } catch(e){
+    toast('Gagal: ' + e.message, true);
   }
-  saveCurrentRoomData();
-  window.closeModal('workerModal');
-  toast('✓ Tersimpan');
-  renderAllRoom();
 };
 
-window.hapusWorker = function(id){
-  const jobs = S.jobs.filter(j => j.workerId === id);
+window.hapusWorker = async function(id){
+  const jobs = S.jobs.filter(j => j.worker_id === id);
   if(jobs.length > 0){
     if(!confirm(`Pekerja ini punya ${jobs.length} riwayat pekerjaan.\nHapus pekerja TANPA hapus riwayat?`)) return;
   } else {
     if(!confirm('Hapus pekerja ini?')) return;
   }
-  S.workers = S.workers.filter(w => w.id !== id);
-  saveCurrentRoomData();
-  toast('Pekerja dihapus');
-  renderAllRoom();
+  try {
+    await Workers.delete(id);
+    S.workers = S.workers.filter(w => w.id !== id);
+    toast('Pekerja dihapus');
+    renderAllRoom();
+  } catch(e){
+    toast('Gagal: ' + e.message, true);
+  }
 };
 
 /* ═══════════════════════════════════════════════════
@@ -1492,43 +1872,75 @@ window.openPeriodeModal = function(){
   window.openModal('periodeModal');
 };
 
-window.simpanPeriode = function(){
+window.simpanPeriode = async function(){
   const p = periodeAktif();
   const m = $('pm_mulai').value;
   const a = $('pm_akhir').value;
   if(!m || !a){ toast('Isi tanggal', true); return; }
   if(m > a){ toast('Mulai harus ≤ akhir', true); return; }
-  p.mulai = m; p.akhir = a;
-  saveCurrentRoomData();
-  window.closeModal('periodeModal');
-  toast('✓ Periode diubah');
-  renderAllRoom();
+
+  try {
+    p.mulai = m; p.akhir = a;
+    await Periods.save({
+      id: p.id,
+      room_id: S.room.id,
+      mulai: p.mulai,
+      akhir: p.akhir,
+      status: p.status,
+      snapshot: p.snapshot,
+      closed_at: p.closed_at,
+    });
+    window.closeModal('periodeModal');
+    toast('✓ Periode diubah');
+    renderAllRoom();
+  } catch(e){
+    toast('Gagal: ' + e.message, true);
+  }
 };
 
-window.tutupPeriode = function(){
+window.tutupPeriode = async function(){
   const p = periodeAktif();
-  const aktifJobs = S.jobs.filter(j => jobDerivasi(j).statusFisik !== 'selesai');
+  const aktifJobs = S.jobs.filter(j => j.status !== 'selesai');
   let msg = 'Tutup periode dan buka periode baru?';
   if(aktifJobs.length > 0){
     msg = `Masih ada ${aktifJobs.length} pekerjaan belum selesai.\nPekerjaan akan tetap tercatat dan muncul di periode berikutnya.\n\nTetap tutup?`;
   }
   if(!confirm(msg)) return;
-  p.status = 'ditutup';
-  p.closedAt = nowISO();
-  p.snapshot = hitungSnapshot(p);
-  const baru = hitungPeriodeBaruSetelah(p.akhir);
-  S.periods.push({
-    id: uid(),
-    mulai: baru.mulai,
-    akhir: baru.akhir,
-    status: 'aktif',
-    createdAt: nowISO(),
-    closedAt: null,
-    snapshot: null,
-  });
-  saveCurrentRoomData();
-  toast('✓ Periode ditutup, periode baru dibuka');
-  renderAllRoom();
+
+  try {
+    p.status = 'ditutup';
+    p.closed_at = nowISO();
+    p.snapshot = hitungSnapshot(p);
+
+    await Periods.save({
+      id: p.id,
+      room_id: S.room.id,
+      mulai: p.mulai,
+      akhir: p.akhir,
+      status: p.status,
+      snapshot: p.snapshot,
+      closed_at: p.closed_at,
+    });
+
+    const baru = hitungPeriodeBaruSetelah(p.akhir);
+    const newPeriod = {
+      id: uid(),
+      room_id: S.room.id,
+      mulai: baru.mulai,
+      akhir: baru.akhir,
+      status: 'aktif',
+      created_at: nowISO(),
+      closed_at: null,
+      snapshot: null,
+    };
+    await Periods.save(newPeriod);
+    S.periods.push(newPeriod);
+
+    toast('✓ Periode ditutup, periode baru dibuka');
+    renderAllRoom();
+  } catch(e){
+    toast('Gagal: ' + e.message, true);
+  }
 };
 
 function hitungSnapshot(p){
@@ -1538,8 +1950,8 @@ function hitungSnapshot(p){
   let totalUpahHak = 0, totalPanjar = 0, totalBayar = 0;
 
   jobsPeriode.forEach(j => {
-    if(isTglDalamPeriode(j.tglAmbil, p)){
-      totalAmbil += j.jumlahAmbil;
+    if(isTglDalamPeriode(j.tgl_ambil, p)){
+      totalAmbil += j.jumlah_ambil;
       totalGantungan += jobDerivasi(j).sisaGantungan;
     }
     const setorPeriode = (j.setoran || []).filter(s => isTglDalamPeriode(s.tgl, p)).reduce((s,x) => s + x.pcs, 0);
@@ -1548,8 +1960,8 @@ function hitungSnapshot(p){
   });
 
   txPeriode.forEach(t => {
-    if(t.jenis === 'panjar') totalPanjar += t.jumlah;
-    if(t.jenis === 'pembayaran') totalBayar += t.jumlah;
+    if(t.jenis === 'panjar') totalPanjar += Number(t.jumlah);
+    if(t.jenis === 'pembayaran') totalBayar += Number(t.jumlah);
   });
 
   return {
@@ -1572,22 +1984,27 @@ window.openTarifModal = function(){
   window.openModal('tarifModal');
 };
 
-window.simpanTarif = function(){
+window.simpanTarif = async function(){
   const t = parseFloat($('tm_tarif').value);
   if(!t || t <= 0){ toast('Tarif tidak valid', true); return; }
-  S.tarif.tarif = Math.round(t);
-  saveCurrentRoomData();
-  window.closeModal('tarifModal');
-  toast('✓ Tarif disimpan');
-  renderTarif();
+
+  try {
+    S.tarif.tarif = Math.round(t);
+    await Tarifs.save(S.room.id, S.tarif.tarif);
+    window.closeModal('tarifModal');
+    toast('✓ Tarif disimpan');
+    renderTarif();
+  } catch(e){
+    toast('Gagal: ' + e.message, true);
+  }
 };
 
 /* ═══════════════════════════════════════════════════
-   BACKUP / RESTORE ROOM
+   BACKUP / RESTORE
    ═══════════════════════════════════════════════════ */
 window.backupJSON = function(){
   const data = {
-    version: 'kh-1.0',
+    version: 'kh-2.0',
     exportedAt: nowISO(),
     room: S.room,
     workers: S.workers,
@@ -1615,19 +2032,11 @@ window.restoreJSON = function(ev){
       const data = JSON.parse(e.target.result);
       if(!confirm('Restore akan MENGGANTI data room ini. Lanjutkan?')) return;
       S.workers = data.workers || [];
-      S.jobs = data.jobs || [];
+      S.jobs = (data.jobs || []).map(normalizeJobFromDB);
       S.transactions = data.transactions || [];
       S.periods = data.periods || [];
       S.tarif = data.tarif || { tarif: 8000 };
-      if(!S.periods.find(p => p.status === 'aktif')){
-        const def = hitungPeriodeDefault();
-        S.periods.push({
-          id: uid(), mulai: def.mulai, akhir: def.akhir,
-          status: 'aktif', createdAt: nowISO(), closedAt: null, snapshot: null,
-        });
-      }
-      saveCurrentRoomData();
-      toast('✓ Data dipulihkan');
+      toast('✓ Data dipulihkan di layar. Backup lokal lama masih tersimpan.');
       renderAllRoom();
     } catch(err){
       toast('File rusak', true);
@@ -1638,19 +2047,8 @@ window.restoreJSON = function(ev){
 };
 
 window.resetRoomData = function(){
-  if(!confirm('HAPUS SEMUA DATA room ini?')) return;
-  if(!confirm('Yakin? Backup dulu lebih aman.')) return;
-  S.workers = []; S.jobs = []; S.transactions = [];
-  S.periods = [];
-  S.tarif = { tarif: 8000 };
-  const def = hitungPeriodeDefault();
-  S.periods.push({
-    id: uid(), mulai: def.mulai, akhir: def.akhir,
-    status: 'aktif', createdAt: nowISO(), closedAt: null, snapshot: null,
-  });
-  saveCurrentRoomData();
-  toast('Data room dihapus');
-  renderAllRoom();
+  if(!confirm('Reset TIDAK disarankan. Data di Supabase tetap utuh.\nCukup logout dan login ulang.\n\nLanjut reset tampilan?')) return;
+  location.reload();
 };
 
 /* ═══════════════════════════════════════════════════
@@ -1667,11 +2065,10 @@ function tick(){
 }
 
 /* ═══════════════════════════════════════════════════
-   RENDER ALL ROOM
+   RENDER ALL
    ═══════════════════════════════════════════════════ */
 function renderAllRoom(){
   if(!S.room) return;
-  saveCurrentRoomData();
   renderDashboard();
   renderPekerjaan();
   renderFisik();
@@ -1684,7 +2081,7 @@ function renderAllRoom(){
 /* ═══════════════════════════════════════════════════
    INIT
    ═══════════════════════════════════════════════════ */
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
   tick(); setInterval(tick, 1000);
 
   // Event listeners
@@ -1693,6 +2090,9 @@ window.addEventListener('DOMContentLoaded', () => {
   $('st_pcs').addEventListener('input', updateSetorAlert);
   $('pj_jumlah').addEventListener('input', updatePanjarAlert);
   $('by_jumlah').addEventListener('input', updateBayarAlert);
+
+  const sfPcs = $('sf_pcs');
+  if(sfPcs) sfPcs.addEventListener('input', updateSetorFisikAlert);
 
   $('loginPassword').addEventListener('keydown', e => {
     if(e.key === 'Enter') $('btnLogin').click();
@@ -1703,25 +2103,27 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 
   // Cek session
-  const sess = getSession();
-  if(sess){
-    const users = loadUsers();
-    const user = users.find(u => u.id === sess.id);
+  try {
+    const user = await Auth.currentUser();
     if(user){
       S.user = user;
-      S.profile = { id: user.id, nama: user.nama, role: user.role, email: user.email };
-      if(user.role === 'super_admin'){
-        loadSuperAdmin();
-        showPage('page-superadmin');
+      S.profile = await Profiles.get(user.id);
+      if(S.profile){
+        if(S.profile.role === 'super_admin'){
+          await loadSuperAdmin();
+          showPage('page-superadmin');
+        } else {
+          await loadRoomPicker();
+          showPage('page-roompicker');
+        }
       } else {
-        loadRoomPicker();
-        showPage('page-roompicker');
+        showPage('page-login');
       }
     } else {
-      clearSession();
       showPage('page-login');
     }
-  } else {
+  } catch(e){
+    console.warn('Session check error', e);
     showPage('page-login');
   }
 
