@@ -30,7 +30,7 @@ const $ = id => document.getElementById(id);
 const rp = n => 'Rp' + Math.round(n).toLocaleString('id-ID');
 const fmtNum = n => Number(n).toLocaleString('id-ID', {maximumFractionDigits:2});
 const esc = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+const uid = () => crypto.randomUUID();
 const nowISO = () => new Date().toISOString();
 const todayISO = () => nowISO().slice(0,10);
 
