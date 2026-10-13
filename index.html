@@ -255,7 +255,232 @@ body{
 .step-body .desc{
   font-size:.83rem; color:var(--dim); line-height:1.6;
 }
+<!-- ═══════ PANDUAN ═══════ -->
+<div class="section" id="panduan">
+  <div class="wrap">
+    <div class="section-tag">Panduan Pengguna</div>
+    <div class="section-title">Cara Pakai KONVEKSI HUB</div>
+    <div class="section-sub">Ikuti langkah-langkah berikut. Gampang, nggak butuh pelatihan.</div>
 
+    <!-- STEP 1 -->
+    <div class="panduan-step">
+      <div class="panduan-head">
+        <div class="panduan-num">1</div>
+        <div class="panduan-title">Login & Masuk Room</div>
+      </div>
+      <div class="panduan-body">
+        <p><b>Cara:</b></p>
+        <ol>
+          <li>Buka <b>managerkonveksi.vercel.app</b> di Chrome</li>
+          <li>Klik <b>MASUK APLIKASI</b></li>
+          <li>Masukkan <b>email</b> & <b>password</b> dari Admin</li>
+          <li>Klik <b>room konveksi</b> Anda</li>
+          <li>Selesai — masuk ke Dashboard</li>
+        </ol>
+        <div class="panduan-tip">
+          💡 <b>Tips:</b> Simpan halaman di Home Screen biar gampang buka (Chrome → menu → "Add to Home Screen").
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 2 -->
+    <div class="panduan-step">
+      <div class="panduan-head">
+        <div class="panduan-num">2</div>
+        <div class="panduan-title">Tambah Pekerja</div>
+      </div>
+      <div class="panduan-body">
+        <p><b>Cara:</b></p>
+        <ol>
+          <li>Buka tab <b>⚙️ LAIN</b></li>
+          <li>Klik <b>+ PEKERJA BARU</b></li>
+          <li>Isi <b>nama</b> & <b>telepon</b> (opsional)</li>
+          <li>Status: <b>Aktif</b></li>
+          <li>Klik <b>SIMPAN</b></li>
+        </ol>
+        <div class="panduan-tip">
+          💡 Tambahkan semua tukang obras Anda dulu, baru mulai kasih kerjaan.
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 3 -->
+    <div class="panduan-step">
+      <div class="panduan-head">
+        <div class="panduan-num">3</div>
+        <div class="panduan-title">Kasih Kerjaan ke Tukang</div>
+      </div>
+      <div class="panduan-body">
+        <p><b>Cara:</b></p>
+        <ol>
+          <li>Buka tab <b>📦 PEKERJAAN</b></li>
+          <li>Klik <b>+ AMBIL BARANG</b></li>
+          <li>Pilih <b>nama tukang</b></li>
+          <li>Isi: <b>barang</b>, <b>jenis</b> (Oblong/Kerah), <b>jumlah pcs</b>, <b>tarif per lusin</b></li>
+          <li>Klik <b>SIMPAN</b></li>
+        </ol>
+        <div class="panduan-tip">
+          💡 <b>Rumus upah:</b> (jumlah pcs ÷ 12) × tarif per lusin. Aplikasi hitung otomatis.
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 4 -->
+    <div class="panduan-step">
+      <div class="panduan-head">
+        <div class="panduan-num">4</div>
+        <div class="panduan-title">Terima Setoran Barang</div>
+      </div>
+      <div class="panduan-body">
+        <p><b>Cara:</b></p>
+        <ol>
+          <li>Buka tab <b>📦 PEKERJAAN</b></li>
+          <li>Cari job tukang yang mau setor</li>
+          <li>Klik <b>📦 SETOR</b></li>
+          <li>Isi <b>jumlah setor</b> (bisa sebagian)</li>
+          <li>Klik <b>KONFIRMASI SETOR</b></li>
+        </ol>
+        <p><b>Hasil:</b></p>
+        <ul>
+          <li>Setor <b>penuh</b> → Status SELESAI, tukang bebas ambil baru</li>
+          <li>Setor <b>sebagian</b> → Status GANTUNGAN, tukang tetap terkunci</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- STEP 5 -->
+    <div class="panduan-step">
+      <div class="panduan-head">
+        <div class="panduan-num">5</div>
+        <div class="panduan-title">Fitur PENDING (Bahan Kurang)</div>
+      </div>
+      <div class="panduan-body">
+        <p><b>Kapan dipakai?</b> Kalau bahan rip/mangset habis, tukang cuma bisa selesai sebagian.</p>
+        <p><b>Cara:</b></p>
+        <ol>
+          <li>Buka job tukang yang bermasalah</li>
+          <li>Klik <b>⏸️ PENDING</b></li>
+          <li>Isi alasan: <b>"Bahan rip habis"</b></li>
+          <li>Klik <b>KONFIRMASI</b></li>
+        </ol>
+        <p><b>Hasil:</b> Tukang <b>bisa ambil barang baru</b>, job lama tetap tercatat.</p>
+        <div class="panduan-tip">
+          ⚠️ Setelah pending, ada tombol <b>BAYAR PENDING</b> (bayar upah) dan <b>SETOR FISIK</b> (setor sisa barang).
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 6 -->
+    <div class="panduan-step">
+      <div class="panduan-head">
+        <div class="panduan-num">6</div>
+        <div class="panduan-title">Panjar (Uang Muka)</div>
+      </div>
+      <div class="panduan-body">
+        <p><b>Kapan dipakai?</b> Tukang minta uang muka (buat weekend, kebutuhan mendesak).</p>
+        <p><b>Cara:</b></p>
+        <ol>
+          <li>Buka job tukang</li>
+          <li>Klik <b>🟡 PANJAR</b></li>
+          <li>Isi <b>jumlah uang</b></li>
+          <li>Klik <b>KONFIRMASI</b></li>
+        </ol>
+        <div class="panduan-tip">
+          ⚠️ Panjar otomatis dikurangi dari sisa gaji. Nggak dobel hitung.
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 7 -->
+    <div class="panduan-step">
+      <div class="panduan-head">
+        <div class="panduan-num">7</div>
+        <div class="panduan-title">Bayar Gaji</div>
+      </div>
+      <div class="panduan-body">
+        <p><b>Cara:</b></p>
+        <ol>
+          <li>Buka job tukang</li>
+          <li>Klik <b>💰 BAYAR</b></li>
+          <li>Isi jumlah (default = sisa upah)</li>
+          <li>Klik <b>KONFIRMASI PEMBAYARAN</b></li>
+        </ol>
+        <p>Bisa bayar full atau cicil, kapan saja.</p>
+      </div>
+    </div>
+
+    <!-- STEP 8 -->
+    <div class="panduan-step">
+      <div class="panduan-head">
+        <div class="panduan-num">8</div>
+        <div class="panduan-title">Cetak Slip Gaji</div>
+      </div>
+      <div class="panduan-body">
+        <p><b>Cara:</b></p>
+        <ol>
+          <li>Buka tab <b>💰 PAYROLL</b></li>
+          <li>Cari nama tukang</li>
+          <li>Klik <b>🖨️ CETAK</b></li>
+          <li>Slip muncul → klik <b>PRINT / PDF</b></li>
+          <li>Pilih: <b>Save as PDF</b> atau <b>Print</b></li>
+        </ol>
+        <div class="panduan-tip">
+          💡 Save as PDF → kirim ke tukang via WhatsApp.
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 9 -->
+    <div class="panduan-step">
+      <div class="panduan-head">
+        <div class="panduan-num">9</div>
+        <div class="panduan-title">Backup Data (PENTING!)</div>
+      </div>
+      <div class="panduan-body">
+        <p><b>Cara:</b></p>
+        <ol>
+          <li>Buka tab <b>⚙️ LAIN</b></li>
+          <li>Klik <b>💾 BACKUP JSON</b></li>
+          <li>File ter-download ke HP</li>
+          <li>Simpan di Google Drive</li>
+        </ol>
+        <div class="panduan-tip">
+          ⚠️ <b>Backup rutin 1x seminggu!</b> Biar data aman kalau ada masalah.
+        </div>
+      </div>
+    </div>
+
+    <!-- FAQ MINI -->
+    <div class="panduan-faq">
+      <div class="panduan-faq-title">❓ Pertanyaan Umum</div>
+      
+      <div class="panduan-faq-item">
+        <b>Lupa password?</b>
+        <p>Hubungi Admin (Super Admin) untuk reset.</p>
+      </div>
+      
+      <div class="panduan-faq-item">
+        <b>Data hilang?</b>
+        <p>Aman di cloud. Logout, login lagi. Kalau tetap, restore dari backup.</p>
+      </div>
+      
+      <div class="panduan-faq-item">
+        <b>Bisa di 2 HP?</b>
+        <p>Bisa. Login akun yang sama di HP berbeda. Data otomatis sync.</p>
+      </div>
+      
+      <div class="panduan-faq-item">
+        <b>HP rusak?</b>
+        <p>Data aman. Beli HP baru, login, semua balik.</p>
+      </div>
+    </div>
+
+    <!-- CTA di Panduan -->
+    <div style="text-align:center; margin-top:30px;">
+      <a href="app.html" class="btn-hero">🔐 MULAI PAKAI SEKARANG</a>
+    </div>
+  </div>
+</div>
 /* ═══════ HARGA ═══════ */
 .harga-list{
   display:flex; flex-direction:column; gap:14px;
