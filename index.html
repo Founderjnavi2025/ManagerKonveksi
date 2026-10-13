@@ -617,7 +617,93 @@ body{
   max-height:400px;
   padding:0 16px 14px;
 }
+/* ═══════ PANDUAN ═══════ */
+.panduan-step{
+  background:linear-gradient(135deg,#0c1a24,#0a151d);
+  border:1px solid var(--line);
+  border-left:3px solid var(--neon);
+  border-radius:10px;
+  padding:18px;
+  margin-bottom:16px;
+}
+.panduan-head{
+  display:flex; align-items:center; gap:12px;
+  margin-bottom:14px;
+  padding-bottom:12px;
+  border-bottom:1px dashed rgba(0,255,198,0.15);
+}
+.panduan-num{
+  width:38px; height:38px; flex-shrink:0;
+  background:linear-gradient(135deg,var(--neon),var(--neon2));
+  color:#04121c; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-weight:900; font-size:1rem;
+  box-shadow:0 0 16px rgba(0,255,198,0.4);
+}
+.panduan-title{
+  font-size:1rem;
+  font-weight:800;
+  color:#fff;
+  letter-spacing:.3px;
+}
+.panduan-body{
+  font-size:.86rem;
+  color:var(--txt);
+  line-height:1.7;
+}
+.panduan-body p{ margin-bottom:8px; }
+.panduan-body ol, .panduan-body ul{
+  margin:8px 0 12px 22px;
+  color:var(--txt);
+}
+.panduan-body li{ margin-bottom:6px; }
+.panduan-body b{ color:var(--neon); }
+.panduan-tip{
+  background:rgba(0,255,198,0.06);
+  border-left:3px solid var(--neon);
+  border-radius:6px;
+  padding:10px 14px;
+  margin-top:12px;
+  font-size:.82rem;
+  color:var(--txt);
+  line-height:1.6;
+}
+.panduan-tip b{ color:var(--neon); }
 
+.panduan-faq{
+  background:linear-gradient(135deg,rgba(0,255,198,0.05),rgba(0,179,255,0.03));
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:18px;
+  margin-top:24px;
+}
+.panduan-faq-title{
+  font-size:.85rem;
+  font-weight:800;
+  color:var(--neon);
+  letter-spacing:1px;
+  margin-bottom:14px;
+  text-transform:uppercase;
+}
+.panduan-faq-item{
+  padding:10px 0;
+  border-bottom:1px dashed rgba(0,255,198,0.12);
+}
+.panduan-faq-item:last-child{ border-bottom:none; }
+.panduan-faq-item b{
+  display:block;
+  color:#fff;
+  font-size:.88rem;
+  margin-bottom:4px;
+}
+.panduan-faq-item p{
+  font-size:.82rem;
+  color:var(--dim);
+  line-height:1.6;
+  margin:0;
+}
+
+/* ═══════ KONTAK ═══════ */
 /* ═══════ KONTAK ═══════ */
 .kontak-btns{
   display:flex; flex-direction:column; gap:10px;
