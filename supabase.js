@@ -28,14 +28,26 @@ const Auth = {
     return data.user || null;
   },
 
+  // FIX: signup TIDAK ganti session admin
   async createUser(email, password, nama){
-    // Ini butuh service_role biasanya, tapi kita pakai signUp biasa
-    // (dengan catatan "Allow new users to sign up" harus ON)
+    // 1. Simpan session admin SEKARANG
+    const { data: { session: adminSession } } = await sb.auth.getSession();
+
+    // 2. Bikin user baru via signUp
     const { data, error } = await sb.auth.signUp({
       email, password,
       options: { data: { nama } }
     });
     if(error) throw error;
+
+    // 3. RESTORE session admin (biar gak jadi user baru)
+    if(adminSession){
+      await sb.auth.setSession({
+        access_token: adminSession.access_token,
+        refresh_token: adminSession.refresh_token,
+      });
+    }
+
     return data.user;
   },
 };
@@ -73,7 +85,6 @@ const Rooms = {
   },
 
   async listForUser(userId){
-    // Room yang pemiliknya user ATAU user member
     const { data: owned } = await sb.from('rooms').select('*').eq('pemilik_id', userId);
     const { data: member } = await sb.from('room_members').select('room_id').eq('user_id', userId);
     const memberIds = (member || []).map(m => m.room_id);
@@ -84,7 +95,6 @@ const Rooms = {
       extra = data || [];
     }
 
-    // Gabung, hilangkan duplikat
     const map = new Map();
     [...(owned || []), ...extra].forEach(r => map.set(r.id, r));
     return [...map.values()];
@@ -119,7 +129,7 @@ const Rooms = {
 
   async addMember(roomId, userId, role = 'owner'){
     const { error } = await sb.from('room_members').insert({ room_id: roomId, user_id: userId, role });
-    if(error && error.code !== '23505') throw error; // ignore duplicate
+    if(error && error.code !== '23505') throw error;
   },
 };
 
@@ -174,6 +184,12 @@ const Jobs = {
       tarif: job.tarif,
       tgl_ambil: job.tgl_ambil,
       setoran: job.setoran || [],
+      status: job.status || 'aktif',
+      pending_at: job.pending_at || null,
+      pending_alasan: job.pending_alasan || null,
+      pending_dibayar: job.pending_dibayar || false,
+      upah_pending: job.upah_pending || 0,
+      pending_catatan_bayar: job.pending_catatan_bayar || null,
     };
     const { data, error } = await sb.from('jobs').upsert(payload).select().single();
     if(error) throw error;
@@ -261,7 +277,7 @@ const Tarifs = {
 };
 
 /* ═══════════════════════════════════════════════════
-   LOAD ALL ROOM DATA (untuk enterRoom)
+   LOAD ALL ROOM DATA
    ═══════════════════════════════════════════════════ */
 async function loadRoomDataFromSupabase(roomId){
   const [workers, jobs, transactions, periods, tarif] = await Promise.all([
@@ -273,3 +289,17 @@ async function loadRoomDataFromSupabase(roomId){
   ]);
   return { workers, jobs, transactions, periods, tarif };
 }
+
+/* ═══════════════════════════════════════════════════
+   EXPOSE KE WINDOW (biar bisa diakses dari app.js)
+   ═══════════════════════════════════════════════════ */
+window.sb = sb;
+window.Auth = Auth;
+window.Profiles = Profiles;
+window.Rooms = Rooms;
+window.Workers = Workers;
+window.Jobs = Jobs;
+window.Transactions = Transactions;
+window.Periods = Periods;
+window.Tarifs = Tarifs;
+window.loadRoomDataFromSupabase = loadRoomDataFromSupabase;
