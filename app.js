@@ -493,7 +493,7 @@ function jobDerivasi(job){
   if(job.status === 'pending'){
     statusFisik = 'pending';
   } else if(totalSetor > 0 && totalSetor < job.jumlah_ambil){
-    statusFisik = 'gantungan';
+    statusFisik = 'proses dikerjakan';
   } else if(totalSetor >= job.jumlah_ambil){
     statusFisik = 'selesai';
   }
