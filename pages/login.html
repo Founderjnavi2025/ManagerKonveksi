@@ -3,35 +3,39 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="theme-color" content="#090817">
 <title>Login — KONVEKSI HUB</title>
 <link rel="stylesheet" href="../assets/css/style.css">
-
-<style>
-#bootScreen { display: none !important; }
-#app { display: block !important; }
-#pageLogin { display: block !important; }
-</style>
-
 </head>
+
 <body>
 
-<div id="bootScreen" class="boot-screen">
-  <div class="boot-logo">KONVEKSI <span>HUB</span></div>
-  <div class="boot-spinner"></div>
-</div>
-
-<div class="page active" id="pageLogin" style="display:none;">
+<div class="page active" id="pageLogin">
   <div class="auth-box">
     <div class="logo-large">KONVEKSI <span>HUB</span></div>
     <div class="auth-sub">Masuk untuk melanjutkan</div>
 
     <label class="f">Email</label>
-    <input type="email" id="loginEmail" placeholder="nama@email.com" autocomplete="email">
+    <input
+      type="email"
+      id="loginEmail"
+      placeholder="nama@email.com"
+      autocomplete="username"
+    >
 
     <label class="f">Password</label>
-    <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
+    <input
+      type="password"
+      id="loginPassword"
+      placeholder="••••••••"
+      autocomplete="current-password"
+    >
 
-    <button class="btn btn-primary btn-block" id="btnLogin" style="margin-top:16px;">MASUK</button>
+    <button
+      class="btn btn-primary btn-block"
+      id="btnLogin"
+      style="margin-top:16px;"
+    >MASUK</button>
 
     <div class="hint" style="text-align:center;margin-top:14px;">
       Akun dibuat oleh Super Admin
@@ -42,60 +46,118 @@
 <div id="toast"></div>
 
 <script type="module">
-import { doLogin, setActiveRoom, getSession } from '../assets/js/auth.js';
-import { Rooms } from '../assets/js/supabase.js';
+import {
+  doLogin,
+  setActiveRoom,
+  getSession
+} from '../assets/js/auth.js';
+
+import {
+  Auth,
+  Rooms
+} from '../assets/js/supabase.js';
 
 const $ = id => document.getElementById(id);
 
-function toast(msg, err){
+function toast(msg, err = false){
   const t = $('toast');
   t.textContent = msg;
   t.className = err ? 'show err' : 'show';
+
   clearTimeout(t._t);
-  t._t = setTimeout(() => t.className = '', 2400);
+  t._t = setTimeout(() => {
+    t.className = '';
+  }, 3000);
 }
 
+function setLoading(loading){
+  $('btnLogin').disabled = loading;
+  $('btnLogin').textContent = loading ? 'MEMUAT...' : 'MASUK';
+}
+
+// Arahkan pengguna berdasarkan role database
+async function redirectByRole(session){
+  if(!session || !session.user || !session.profile){
+    throw new Error('Data profil akun tidak ditemukan');
+  }
+
+  const role = session.profile.role;
+
+  // SUPER ADMIN
+  if(role === 'super_admin'){
+    localStorage.removeItem('active_room');
+    localStorage.removeItem('active_room_name');
+
+    window.location.href = '/pages/super-admin.html';
+    return;
+  }
+
+  // OWNER
+  if(role === 'owner'){
+    const rooms = await Rooms.listForUser(session.user.id);
+
+    if(!rooms || rooms.length === 0){
+      throw new Error('Akun Owner belum memiliki room');
+    }
+
+    setActiveRoom(rooms[0].id, rooms[0].nama);
+
+    window.location.href = '/pages/dashboard.html';
+    return;
+  }
+
+  // OPERATOR / ROLE LAIN
+  throw new Error('Role akun tidak dikenali: ' + role);
+}
+
+// Proses login
 async function handleLogin(){
   const email = $('loginEmail').value.trim().toLowerCase();
   const pass = $('loginPassword').value;
-  if(!email || !pass){ toast('Isi email dan password', true); return; }
 
-  $('btnLogin').disabled = true;
-  $('btnLogin').textContent = 'MEMUAT...';
+  if(!email || !pass){
+    toast('Isi email dan password', true);
+    return;
+  }
+
+  setLoading(true);
 
   try {
-    const { user } = await doLogin(email, pass);
-    const rooms = await Rooms.listForUser(user.id);
-    if(rooms.length > 0){
-      setActiveRoom(rooms[0].id, rooms[0].nama);
-    }
-    toast('✓ Berhasil masuk');
-    setTimeout(() => window.location.href = '/pages/dashboard.html', 400);
-  } catch(e){
+    const { user, profile } = await doLogin(email, pass);
+
+    await redirectByRole({ user, profile });
+
+  } catch(e) {
+    console.error('Login error:', e);
     toast('Login gagal: ' + e.message, true);
-    $('btnLogin').disabled = false;
-    $('btnLogin').textContent = 'MASUK';
+    setLoading(false);
   }
 }
 
 $('btnLogin').addEventListener('click', handleLogin);
-$('loginPassword').addEventListener('keydown', e => { if(e.key === 'Enter') handleLogin(); });
 
+$('loginPassword').addEventListener('keydown', e => {
+  if(e.key === 'Enter'){
+    handleLogin();
+  }
+});
+
+// Periksa sesi yang masih aktif
 (async () => {
   try {
     const session = await getSession();
+
     if(session){
-      window.location.href = '/pages/dashboard.html';
-      return;
+      await redirectByRole(session);
     }
+
   } catch(e) {
     console.error('Session error:', e);
-    toast('Koneksi/session bermasalah: ' + e.message, true);
-  } finally {
-    $('bootScreen').style.display = 'none';
-    $('pageLogin').style.display = 'block';
+
+    toast('Session: ' + e.message, true);
   }
 })();
 </script>
+
 </body>
 </html>

@@ -16,9 +16,9 @@ export const Auth = {
   },
 
   async currentUser() {
-    const { data, error } = await sb.auth.getUser();
+    const { data, error } = await sb.auth.getSession();
     if (error) throw error;
-    return data.user || null;
+    return data.session?.user || null;
   },
 };
 
