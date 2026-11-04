@@ -1,6 +1,10 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
 
-export const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+export const SUPABASE_URL =
+  'https://avlanvviiinbyvtimhhp.supabase.co';
+
+export const SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF2bGFudnZpaWluYnl2dG1ocCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzkxODExMjU4LCJleHAiOjIxMDczODcyNTh9.ZOTvoKJBFBLJDlnSDBXKKm8ihn0b3xESSHA0c2JargI';
 
 export const Auth = {
   async login(email, password){
