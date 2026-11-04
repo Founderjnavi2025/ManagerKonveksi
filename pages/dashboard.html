@@ -441,9 +441,14 @@ $('btnLogout').addEventListener('click', doLogout);
 setInterval(tick, 1000);
 tick();
 
-init().catch(e => {
-  toast('Error: ' + e.message, true);
-  console.error(e);
+init().then(() => {
+  $('bootScreen').style.display = 'none';
+  if ($('app')) $('app').style.display = 'block';
+}).catch(e => {
+  console.error('Dashboard error:', e);
+  toast('Dashboard gagal dimuat: ' + e.message, true);
+  $('bootScreen').style.display = 'none';
+  if ($('app')) $('app').style.display = 'block';
 });
 </script>
 </body>
