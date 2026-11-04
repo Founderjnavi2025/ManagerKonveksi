@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Profil Pekerja — KONVEKSI HUB</title>
+<link rel="stylesheet" href="../assets/css/style.css">
+<link rel="stylesheet" href="../assets/css/components.css">
+</head>
+<body>
+
+<div id="bootScreen" class="boot-screen">
+  <div class="boot-logo">KONVEKSI <span>HUB</span></div>
+  <div class="boot-spinner"></div>
+</div>
+
+<div id="app" style="display:none;">
+  <header>
+    <div class="header-left">
+      <a href="workers.html" class="btn-back">←</a>
+      <div>
+        <div class="logo" id="workerTitle">PROFIL</div>
+        <div class="room-sub" id="workerSub">—</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div class="clock" id="clock">--:--</div>
+      <button class="btn-logout" id="btnLogout">KELUAR</button>
+    </div>
+  </header>
+
+  <div class="page active">
+    <div id="content">
+      <div class="empty">Memuat...</div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script type="module">
+import { requireAuth, getActiveRoomId, doLogout } from '../assets/js/auth.js';
+import { Workers, Jobs, Transactions, Rooms, hitungUpah } from '../assets/js/supabase.js';
+import {
+  pekerjaDerivasi, bebanPekerja, isTerkunci,
+  escapeHtml, fmtDate, rp,
+} from '../assets/js/workers.js';
+
+const $ = id => document.getElementById(id);
+function toast(msg, err){
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = err ? 'show err' : 'show';
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.className = '', 2400);
+}
+
+function tick(){
+  const d = new Date();
+  $('clock').textContent = [d.getHours(), d.getMinutes(), d.getSeconds()]
+    .map(n => String(n).padStart(2,'0')).join(':');
+}
+
+async function init(){
+  await requireAuth();
+  const roomId = getActiveRoomId();
+  if(!roomId) throw new Error('Room belum dipilih');
+
+  const workerId = new URLSearchParams(location.search).get('id');
+  if(!workerId) throw new Error('Worker ID tidak ditemukan');
+
+  const [worker, jobs, transactions, room] = await Promise.all([
+    Workers.get(workerId),
+    Jobs.list(roomId),
+    Transactions.list(roomId),
+    Rooms.get(roomId),
+  ]);
+
+  if(!worker) throw new Error('Pekerja tidak ditemukan');
+
+  const d = pekerjaDerivasi(worker, jobs, transactions);
+  const beban = bebanPekerja(worker, jobs);
+  const terkunci = isTerkunci(worker, jobs);
+
+  $('workerTitle').textContent = worker.nama.toUpperCase();
+  $('workerSub').textContent = (worker.aktif ? '🟢 Aktif' : '⚫ Nonaktif') + ' • ' + room.nama;
+  document.title = worker.nama + ' — KONVEKSI HUB';
+
+  // Status badge
+  let statusBadge = '';
+  if(!worker.aktif) statusBadge = '<span class="badge dim">NONAKTIF</span>';
+  else if(terkunci) statusBadge = '<span class="badge warn">TERKUNCI</span>';
+  else statusBadge = '<span class="badge ok">TERSEDIA</span>';
+
+  // Riwayat job terakhir (10)
+  const myJobs = d.jobs.slice(0, 10);
+  const jobListHtml = myJobs.length === 0
+    ? '<div class="empty">Belum ada riwayat pekerjaan</div>'
+    : myJobs.map(j => {
+      const setor = (j.setoran || []).reduce((s, x) => s + (x.pcs || 0), 0);
+      const sisa = Math.max(0, j.jumlah_ambil - setor);
+      let badge = '';
+      if(j.status === 'pending') badge = '<span class="badge danger">PENDING</span>';
+      else if(j.status === 'selesai') badge = '<span class="badge ok">SELESAI</span>';
+      else if(setor > 0) badge = '<span class="badge warn">GANTUNGAN</span>';
+      else badge = '<span class="badge blue">AKTIF</span>';
+
+      return `
+        <a href="job-detail.html?id=${j.id}" class="card" style="text-decoration:none;display:block;color:inherit;">
+          <div class="card-head">
+            <span class="card-code">${escapeHtml(j.barang)} ${escapeHtml(j.jenis)}</span>
+            ${badge}
+          </div>
+          <div class="card-info">📅 ${fmtDate(j.tgl_ambil)} • ${j.jumlah_ambil} pcs</div>
+          <div class="card-info">📦 Setor: ${setor} pcs • Sisa: ${sisa} pcs</div>
+        </a>
+      `;
+    }).join('');
+
+  // Riwayat transaksi (10)
+  const myTx = d.transactions.slice(0, 10);
+  const txListHtml = myTx.length === 0
+    ? '<div class="empty">Belum ada riwayat upah</div>'
+    : myTx.map(t => `
+      <div class="card ${t.jenis === 'panjar' ? 'gantung' : 'done'}">
+        <div class="card-info">
+          ${t.jenis === 'panjar' ? '🟡 Panjar' : '💰 Pembayaran'} — <b>${rp(t.jumlah)}</b>
+        </div>
+        <div class="card-info" style="font-size:0.72rem;">
+          ${fmtDate(t.tgl)}${t.keterangan ? ' • ' + escapeHtml(t.keterangan) : ''}
+        </div>
+      </div>
+    `).join('');
+
+  $('content').innerHTML = `
+    <div class="card">
+      <div class="card-head">
+        <span class="card-code">PROFIL PEKERJA</span>
+        ${statusBadge}
+      </div>
+      <div class="card-name">${escapeHtml(worker.nama)}</div>
+      <div class="card-info">📞 ${worker.telepon ? escapeHtml(worker.telepon) : '(tanpa telepon)'}</div>
+      <div class="card-info">📅 Mulai kerja: ${worker.tgl_mulai ? fmtDate(worker.tgl_mulai) : '(belum diisi)'}</div>
+      ${beban.beban > 0 || beban.pending > 0 ? `
+        <div class="card-info">
+          📦 Beban aktif: <b>${beban.beban} pcs</b>
+          ${beban.pending > 0 ? ` • Pending: <b>${beban.pending} pcs</b>` : ''}
+        </div>
+      ` : ''}
+    </div>
+
+    <h2 class="section">Ringkasan</h2>
+    <div class="stat-grid">
+      <div class="stat-box"><div class="lbl">Total Kerja</div><div class="val">${d.total_kerja}</div></div>
+      <div class="stat-box"><div class="lbl">Total Ambil</div><div class="val">${d.total_ambil} pcs</div></div>
+      <div class="stat-box ok"><div class="lbl">Total Setor</div><div class="val ok">${d.total_setor} pcs</div></div>
+      <div class="stat-box warn"><div class="lbl">Pending</div><div class="val warn">${d.total_pending} pcs</div></div>
+    </div>
+
+    <h2 class="section">Keuangan</h2>
+    <div class="card">
+      <div class="info-line"><span>Upah Hak</span><span>${rp(d.upah_hak)}</span></div>
+      <div class="info-line"><span>Total Panjar</span><span>${rp(d.total_panjar)}</span></div>
+      <div class="info-line"><span>Total Bayar</span><span>${rp(d.total_bayar)}</span></div>
+      <div class="info-line total"><span>Sisa Upah</span><span>${rp(d.sisa_upah)}</span></div>
+    </div>
+
+    <h2 class="section">Riwayat Pekerjaan (${Math.min(10, d.jobs.length)}/${d.jobs.length})</h2>
+    ${jobListHtml}
+
+    <h2 class="section">Riwayat Upah (${Math.min(10, d.transactions.length)}/${d.transactions.length})</h2>
+    ${txListHtml}
+
+    <div style="margin-top:16px;">
+      <a href="workers.html" class="btn btn-ghost btn-block">← Kembali ke Daftar Pekerja</a>
+    </div>
+  `;
+
+  $('bootScreen').style.display = 'none';
+  $('app').style.display = 'block';
+}
+
+$('btnLogout').addEventListener('click', doLogout);
+setInterval(tick, 1000);
+tick();
+
+init().catch(e => { toast(e.message, true); console.error(e); });
+</script>
+</body>
+</html>

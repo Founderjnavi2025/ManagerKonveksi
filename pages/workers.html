@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Pekerja — KONVEKSI HUB</title>
+<link rel="stylesheet" href="../assets/css/style.css">
+<link rel="stylesheet" href="../assets/css/components.css">
+</head>
+<body>
+
+<div id="bootScreen" class="boot-screen">
+  <div class="boot-logo">KONVEKSI <span>HUB</span></div>
+  <div class="boot-spinner"></div>
+</div>
+
+<div id="app" style="display:none;">
+  <header>
+    <div class="header-left">
+      <a href="dashboard.html" class="btn-back">←</a>
+      <div>
+        <div class="logo">KONVEKSI <span>HUB</span></div>
+        <div class="room-sub" id="roomSub">—</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div class="clock" id="clock">--:--</div>
+      <button class="btn-logout" id="btnLogout">KELUAR</button>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <a href="dashboard.html">🏠 DASHBOARD</a>
+    <a href="jobs.html">📦 PEKERJAAN</a>
+    <a href="warehouse.html">👁️ MONITOR</a>
+    <a href="payroll.html">💰 PAYROLL</a>
+    <a href="reports.html">📊 LAPORAN</a>
+  </div>
+
+  <div class="page active">
+    <div class="page-header">
+      <div class="ph-left">
+        <div class="ph-title">Pekerja</div>
+        <div class="ph-sub" id="workersSub">—</div>
+      </div>
+      <div class="ph-actions">
+        <button class="btn btn-primary btn-sm" id="btnTambah">+ Pekerja Baru</button>
+      </div>
+    </div>
+
+    <div class="chip-row" id="filterRow">
+      <div class="chip active" data-filter="semua">Semua</div>
+      <div class="chip" data-filter="aktif">Aktif</div>
+      <div class="chip" data-filter="nonaktif">Nonaktif</div>
+    </div>
+
+    <input type="text" id="searchInput" placeholder="🔍 Cari nama / telepon..." style="margin-bottom:12px;">
+
+    <div id="workersList">
+      <div class="empty">Memuat...</div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Tambah/Ubah Pekerja -->
+<div class="modal-bg" id="workerModal">
+  <div class="modal">
+    <h3 id="wm_title">Tambah Pekerja</h3>
+    <div class="modal-body">
+      <label class="f">Nama</label>
+      <input type="text" id="wm_nama" placeholder="cth: Kang Budi">
+
+      <label class="f">Telepon (opsional)</label>
+      <input type="text" id="wm_telepon" inputmode="tel" placeholder="cth: 0812xxxx">
+
+      <label class="f">Tanggal Mulai (opsional)</label>
+      <input type="date" id="wm_tgl_mulai">
+
+      <label class="f">Status</label>
+      <select id="wm_aktif">
+        <option value="true">Aktif</option>
+        <option value="false">Nonaktif</option>
+      </select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('workerModal')">Batal</button>
+      <button class="btn btn-primary" id="btnSimpanWorker">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Konfirmasi Hapus -->
+<div class="modal-bg" id="hapusModal">
+  <div class="modal">
+    <h3>Hapus Pekerja?</h3>
+    <div class="modal-body">
+      <p id="hapusInfo">Yakin hapus pekerja ini?</p>
+      <div class="alert warn">
+        Pekerja yang sudah punya riwayat pekerjaan tidak bisa dihapus — nonaktifkan saja.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('hapusModal')">Batal</button>
+      <button class="btn btn-danger" id="btnHapusWorker">Hapus</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script type="module">
+import { requireAuth, getActiveRoomId, doLogout } from '../assets/js/auth.js';
+import { Rooms, Workers, Jobs, Transactions } from '../assets/js/supabase.js';
+import {
+  renderWorkerCard, tambahPekerja, ubahPekerja, hapusPekerja,
+  escapeHtml, todayISO,
+} from '../assets/js/workers.js';
+
+const S = {
+  room: null,
+  workers: [],
+  jobs: [],
+  transactions: [],
+  filter: 'semua',
+  search: '',
+  editingId: null,
+  deletingId: null,
+};
+
+const $ = id => document.getElementById(id);
+function toast(msg, err){
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = err ? 'show err' : 'show';
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.className = '', 2400);
+}
+function openModal(id){ $(id).classList.add('show'); }
+function closeModal(id){ $(id).classList.remove('show'); }
+window.openModal = openModal;
+window.closeModal = closeModal;
+
+function tick(){
+  const d = new Date();
+  $('clock').textContent = [d.getHours(), d.getMinutes(), d.getSeconds()]
+    .map(n => String(n).padStart(2,'0')).join(':');
+}
+
+async function load(){
+  const roomId = getActiveRoomId();
+  if(!roomId) throw new Error('Room belum dipilih');
+
+  S.room = await Rooms.get(roomId);
+  const [workers, jobs, transactions] = await Promise.all([
+    Workers.list(roomId),
+    Jobs.list(roomId),
+    Transactions.list(roomId),
+  ]);
+  S.workers = workers;
+  S.jobs = jobs;
+  S.transactions = transactions;
+
+  $('roomSub').textContent = S.room.nama;
+  document.title = 'Pekerja — ' + S.room.nama;
+  render();
+}
+
+function render(){
+  let filtered = S.workers.filter(w => {
+    if(S.filter === 'aktif' && !w.aktif) return false;
+    if(S.filter === 'nonaktif' && w.aktif) return false;
+    if(S.search){
+      const q = S.search.toLowerCase();
+      if(!(w.nama || '').toLowerCase().includes(q) &&
+         !(w.telepon || '').toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+
+  $('workersSub').textContent = filtered.length + ' pekerja';
+  $('workersList').innerHTML = filtered.length === 0
+    ? '<div class="empty"><span class="big">👷</span>Belum ada pekerja</div>'
+    : filtered.map(w => renderWorkerCard(w, S.jobs)).join('');
+}
+
+/* ═══════ MODAL TAMBAH ═══════ */
+function openTambahWorker(){
+  S.editingId = null;
+  $('wm_title').textContent = 'Tambah Pekerja';
+  $('wm_nama').value = '';
+  $('wm_telepon').value = '';
+  $('wm_tgl_mulai').value = todayISO();
+  $('wm_aktif').value = 'true';
+  openModal('workerModal');
+}
+
+/* ═══════ MODAL UBAH ═══════ */
+window.openUbahWorker = function(id){
+  const w = S.workers.find(x => x.id === id);
+  if(!w) return;
+  S.editingId = id;
+  $('wm_title').textContent = 'Ubah Pekerja';
+  $('wm_nama').value = w.nama;
+  $('wm_telepon').value = w.telepon || '';
+  $('wm_tgl_mulai').value = w.tgl_mulai || '';
+  $('wm_aktif').value = w.aktif ? 'true' : 'false';
+  openModal('workerModal');
+};
+
+async function handleSimpanWorker(){
+  const btn = $('btnSimpanWorker');
+  btn.disabled = true; btn.textContent = 'MENYIMPAN...';
+
+  try {
+    if(S.editingId){
+      const w = S.workers.find(x => x.id === S.editingId);
+      await ubahPekerja({
+        worker: w,
+        nama: $('wm_nama').value,
+        telepon: $('wm_telepon').value,
+        tgl_mulai: $('wm_tgl_mulai').value,
+        aktif: $('wm_aktif').value === 'true',
+      });
+      toast('✓ Pekerja diubah');
+    } else {
+      await tambahPekerja({
+        roomId: S.room.id,
+        nama: $('wm_nama').value,
+        telepon: $('wm_telepon').value,
+        tgl_mulai: $('wm_tgl_mulai').value,
+      });
+      toast('✓ Pekerja ditambahkan');
+    }
+    closeModal('workerModal');
+    await load();
+  } catch(e){
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Simpan';
+  }
+}
+
+/* ═══════ MODAL HAPUS ═══════ */
+window.openHapusWorker = function(id){
+  const w = S.workers.find(x => x.id === id);
+  if(!w) return;
+  S.deletingId = id;
+  $('hapusInfo').innerHTML = `Yakin hapus <b>${escapeHtml(w.nama)}</b>?`;
+  openModal('hapusModal');
+};
+
+async function handleHapusWorker(){
+  const btn = $('btnHapusWorker');
+  btn.disabled = true; btn.textContent = 'MENGHAPUS...';
+  try {
+    const w = S.workers.find(x => x.id === S.deletingId);
+    await hapusPekerja({ worker: w, jobs: S.jobs });
+    closeModal('hapusModal');
+    toast('✓ Pekerja dihapus');
+    await load();
+  } catch(e){
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Hapus';
+  }
+}
+
+/* ═══════ INIT ═══════ */
+$('btnLogout').addEventListener('click', doLogout);
+$('btnTambah').addEventListener('click', openTambahWorker);
+$('btnSimpanWorker').addEventListener('click', handleSimpanWorker);
+$('btnHapusWorker').addEventListener('click', handleHapusWorker);
+$('searchInput').addEventListener('input', e => { S.search = e.target.value; render(); });
+
+document.querySelectorAll('.chip').forEach(c => {
+  c.onclick = () => {
+    S.filter = c.dataset.filter;
+    document.querySelectorAll('.chip').forEach(x => x.classList.toggle('active', x === c));
+    render();
+  };
+});
+
+document.querySelectorAll('.modal-bg').forEach(bg => {
+  bg.addEventListener('click', e => { if(e.target === bg) bg.classList.remove('show'); });
+});
+
+setInterval(tick, 1000);
+tick();
+
+(async () => {
+  try {
+    await requireAuth();
+    await load();
+    $('bootScreen').style.display = 'none';
+    $('app').style.display = 'block';
+  } catch(e){
+    toast(e.message, true);
+    console.error(e);
+  }
+})();
+</script>
+</body>
+</html>

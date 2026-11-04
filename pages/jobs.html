@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Pekerjaan — KONVEKSI HUB</title>
+<link rel="stylesheet" href="../assets/css/style.css">
+<link rel="stylesheet" href="../assets/css/components.css">
+</head>
+<body>
+
+<div id="bootScreen" class="boot-screen">
+  <div class="boot-logo">KONVEKSI <span>HUB</span></div>
+  <div class="boot-spinner"></div>
+</div>
+
+<div id="app" style="display:none;">
+  <header>
+    <div class="header-left">
+      <div>
+        <div class="logo">KONVEKSI <span>HUB</span></div>
+        <div class="room-sub" id="roomSub">—</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div class="clock" id="clock">--:--</div>
+      <button class="btn-logout" id="btnLogout">KELUAR</button>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <a href="dashboard.html">🏠 DASHBOARD</a>
+    <a href="jobs.html" class="active">📦 PEKERJAAN</a>
+    <a href="warehouse.html">👁️ MONITOR</a>
+    <a href="payroll.html">💰 PAYROLL</a>
+    <a href="reports.html">📊 LAPORAN</a>
+  </div>
+
+  <div class="page active">
+    <div class="page-header">
+      <div class="ph-left">
+        <div class="ph-title">Pekerjaan</div>
+        <div class="ph-sub" id="jobsSub">—</div>
+      </div>
+      <div class="ph-actions">
+        <button class="btn btn-primary btn-sm" id="btnAmbil">+ Ambil Barang</button>
+      </div>
+    </div>
+
+    <div class="chip-row" id="filterRow">
+      <div class="chip active" data-filter="semua">Semua</div>
+      <div class="chip" data-filter="aktif">Aktif</div>
+      <div class="chip" data-filter="gantungan">Gantungan</div>
+      <div class="chip" data-filter="pending">Pending</div>
+      <div class="chip" data-filter="selesai">Selesai</div>
+    </div>
+
+    <input type="text" id="searchInput" placeholder="🔍 Cari pekerja / barang..." style="margin-bottom:12px;">
+
+    <div id="jobsList">
+      <div class="empty">Memuat...</div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Ambil Barang -->
+<div class="modal-bg" id="ambilModal">
+  <div class="modal">
+    <h3>+ Ambil Barang</h3>
+    <div class="modal-body">
+      <label class="f">Pekerja</label>
+      <select id="am_worker"></select>
+      <div id="am_workerInfo" style="margin-top:6px;"></div>
+
+      <label class="f">Nama Barang</label>
+      <input type="text" id="am_barang" placeholder="cth: Kaos Polos">
+
+      <label class="f">Jenis</label>
+      <select id="am_jenis">
+        <option value="Oblong">Oblong</option>
+        <option value="Kerah">Kerah</option>
+      </select>
+
+      <div class="row2">
+        <div>
+          <label class="f">Jumlah (pcs)</label>
+          <input type="number" id="am_jumlah" inputmode="numeric">
+        </div>
+        <div>
+          <label class="f">Tarif/Lusin</label>
+          <input type="number" id="am_tarif" inputmode="numeric" value="8000">
+        </div>
+      </div>
+
+      <label class="f">Tanggal Ambil</label>
+      <input type="date" id="am_tgl">
+
+      <div class="alert ok" id="am_preview" style="display:none;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('ambilModal')">Batal</button>
+      <button class="btn btn-primary" id="btnSimpanAmbil">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Setor -->
+<div class="modal-bg" id="setorModal">
+  <div class="modal">
+    <h3>📦 Setor Barang</h3>
+    <div class="modal-body">
+      <div id="setorInfo"></div>
+      <label class="f">Jumlah Setor (pcs)</label>
+      <input type="number" id="st_pcs" inputmode="numeric">
+      <div id="st_alert"></div>
+      <label class="f">Tanggal Setor</label>
+      <input type="date" id="st_tgl">
+      <label class="f">Keterangan (opsional)</label>
+      <input type="text" id="st_ket" placeholder="cth: 3 rusak">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('setorModal')">Batal</button>
+      <button class="btn btn-done" id="btnSimpanSetor">Konfirmasi Setor</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Pending -->
+<div class="modal-bg" id="pendingModal">
+  <div class="modal">
+    <h3>⏸️ Pindah ke Pending</h3>
+    <div class="modal-body">
+      <div id="pendingInfo"></div>
+      <label class="f">Alasan Pending (wajib)</label>
+      <input type="text" id="pendingAlasan" placeholder="cth: Rip & mangset habis">
+      <div class="alert warn" style="margin-top:10px;">
+        ℹ️ Setelah pending, pekerja <b>bisa ambil barang baru</b>. Job lama tetap tercatat.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('pendingModal')">Batal</button>
+      <button class="btn btn-warn" id="btnSimpanPending">Konfirmasi Pending</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Bayar -->
+<div class="modal-bg" id="bayarModal">
+  <div class="modal">
+    <h3>💰 Bayar Upah</h3>
+    <div class="modal-body">
+      <div id="bayarInfo"></div>
+
+      <label class="f">Basis Upah</label>
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <label style="flex:1;cursor:pointer;padding:8px;border:1px solid var(--line-2);border-radius:4px;">
+          <input type="radio" name="basis" value="setor" checked style="width:auto;height:auto;margin-right:6px;">
+          <b>Setor</b> (default)
+        </label>
+        <label style="flex:1;cursor:pointer;padding:8px;border:1px solid var(--line-2);border-radius:4px;">
+          <input type="radio" name="basis" value="ambil" style="width:auto;height:auto;margin-right:6px;">
+          <b>Ambil</b> (di muka)
+        </label>
+      </div>
+
+      <label class="f">Jumlah Bayar (Rp)</label>
+      <input type="number" id="by_jumlah" inputmode="numeric">
+      <div id="by_alert"></div>
+
+      <label class="f">Tanggal</label>
+      <input type="date" id="by_tgl">
+
+      <label class="f">Keterangan (opsional)</label>
+      <input type="text" id="by_ket">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('bayarModal')">Batal</button>
+      <button class="btn btn-done" id="btnSimpanBayar">Konfirmasi Bayar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Bayar Pending -->
+<div class="modal-bg" id="bayarPendingModal">
+  <div class="modal">
+    <h3>💰 Bayar Upah Pending</h3>
+    <div class="modal-body">
+      <div id="bayarPendingInfo"></div>
+      <label class="f">Nominal Bayar (Rp)</label>
+      <input type="number" id="bp_jumlah" inputmode="numeric">
+      <label class="f">Catatan</label>
+      <input type="text" id="bp_catatan" placeholder="cth: Sudah dibayar, menunggu setor fisik">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('bayarPendingModal')">Batal</button>
+      <button class="btn btn-done" id="btnSimpanBayarPending">Konfirmasi Bayar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Setor Fisik Pending -->
+<div class="modal-bg" id="setorFisikModal">
+  <div class="modal">
+    <h3>📦 Setor Fisik (Pending)</h3>
+    <div class="modal-body">
+      <div id="setorFisikInfo"></div>
+      <label class="f">Jumlah Setor (pcs)</label>
+      <input type="number" id="sf_pcs" inputmode="numeric">
+      <div id="sf_alert"></div>
+      <div class="alert warn" style="margin-top:10px;">
+        ℹ️ Gaji job ini sudah dibayar. Setor fisik tidak memicu pembayaran baru.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('setorFisikModal')">Batal</button>
+      <button class="btn btn-done" id="btnSimpanSetorFisik">Konfirmasi Setor</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script type="module">
+import { requireAuth, getActiveRoomId, doLogout } from '../assets/js/auth.js';
+import { Rooms, Workers, Jobs, Transactions, Periods, hitungUpah } from '../assets/js/supabase.js';
+import {
+  jobDerivasi, isWorkerTerkunci, durasiPendingHari, isPendingLewat,
+  ambilBarang, setorBarang, pendingJob, bayarPending, setorFisikPending,
+  bayarUpah, panjar, renderJobCard, escapeHtml,
+  todayISO, fmtDate, rp,
+} from '../assets/js/jobs.js';
+
+/* ═══════ STATE ═══════ */
+const S = {
+  room: null,
+  workers: [],
+  jobs: [],
+  transactions: [],
+  periods: [],
+  filter: 'semua',
+  search: '',
+  currentJobId: null,
+};
+
+/* ═══════ UTIL ═══════ */
+const $ = id => document.getElementById(id);
+function toast(msg, err){
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = err ? 'show err' : 'show';
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.className = '', 2400);
+}
+function openModal(id){ $(id).classList.add('show'); }
+function closeModal(id){ $(id).classList.remove('show'); }
+window.openModal = openModal;
+window.closeModal = closeModal;
+
+function tick(){
+  const d = new Date();
+  $('clock').textContent = [d.getHours(), d.getMinutes(), d.getSeconds()]
+    .map(n => String(n).padStart(2,'0')).join(':');
+}
+
+/* ═══════ LOAD ═══════ */
+async function load(){
+  const roomId = getActiveRoomId();
+  if(!roomId) throw new Error('Room belum dipilih');
+
+  S.room = await Rooms.get(roomId);
+  const [workers, jobs, transactions, periods] = await Promise.all([
+    Workers.list(roomId),
+    Jobs.list(roomId),
+    Transactions.list(roomId),
+    Periods.list(roomId),
+  ]);
+  S.workers = workers;
+  S.jobs = jobs;
+  S.transactions = transactions;
+  S.periods = periods;
+
+  $('roomSub').textContent = S.room.nama;
+  document.title = 'Pekerjaan — ' + S.room.nama;
+
+  render();
+}
+
+/* ═══════ RENDER ═══════ */
+function render(){
+  const filtered = S.jobs.filter(j => {
+    const d = jobDerivasi(j, S.transactions);
+    if(S.filter === 'aktif' && d.statusFisik !== 'aktif') return false;
+    if(S.filter === 'gantungan' && d.statusFisik !== 'gantungan') return false;
+    if(S.filter === 'pending' && j.status !== 'pending') return false;
+    if(S.filter === 'selesai' && d.statusFisik !== 'selesai') return false;
+    if(S.search){
+      const q = S.search.toLowerCase();
+      if(!(j.worker_nama || '').toLowerCase().includes(q) &&
+         !(j.barang || '').toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+
+  $('jobsSub').textContent = filtered.length + ' pekerjaan';
+  $('jobsList').innerHTML = filtered.length === 0
+    ? '<div class="empty"><span class="big">📦</span>Belum ada pekerjaan</div>'
+    : filtered.map(j => renderJobCard(j, S.transactions)).join('');
+
+  // Bind modal handlers
+  bindCardActions();
+}
+
+function bindCardActions(){
+  document.querySelectorAll('.chip').forEach(c => {
+    c.onclick = () => {
+      S.filter = c.dataset.filter;
+      document.querySelectorAll('.chip').forEach(x => x.classList.toggle('active', x === c));
+      render();
+    };
+  });
+}
+
+/* ═══════ MODAL: AMBIL ═══════ */
+function openAmbilModal(){
+  const tersedia = S.workers.filter(w => w.aktif && !isWorkerTerkunci(w.id, S.jobs));
+  if(tersedia.length === 0){
+    toast('Semua pekerja terkunci atau belum ada pekerja aktif', true);
+    return;
+  }
+  $('am_worker').innerHTML = '<option value="">— Pilih Pekerja —</option>' +
+    tersedia.map(w => `<option value="${w.id}">${escapeHtml(w.nama)}</option>`).join('');
+  $('am_workerInfo').innerHTML = '';
+  $('am_barang').value = '';
+  $('am_jenis').value = 'Oblong';
+  $('am_jumlah').value = '';
+  $('am_tarif').value = 8000;
+  $('am_tgl').value = todayISO();
+  $('am_preview').style.display = 'none';
+  openModal('ambilModal');
+}
+window.openAmbilModal = openAmbilModal;
+
+function updateAmbilPreview(){
+  const jumlah = parseInt($('am_jumlah').value) || 0;
+  const tarif = parseFloat($('am_tarif').value) || 0;
+  const el = $('am_preview');
+  if(jumlah > 0 && tarif > 0){
+    const upah = hitungUpah(jumlah, tarif);
+    el.innerHTML = `Potensi upah: <b>${rp(upah)}</b> <small>(${jumlah} pcs = ${(jumlah/12).toFixed(2)} lusin × ${rp(tarif)})</small>`;
+    el.style.display = 'block';
+  } else el.style.display = 'none';
+}
+
+async function handleSimpanAmbil(){
+  const workerId = $('am_worker').value;
+  const worker = S.workers.find(w => w.id === workerId);
+  const btn = $('btnSimpanAmbil');
+  btn.disabled = true; btn.textContent = 'MENYIMPAN...';
+
+  try {
+    await ambilBarang({
+      roomId: S.room.id,
+      worker,
+      barang: $('am_barang').value.trim(),
+      jenis: $('am_jenis').value,
+      jumlah: parseInt($('am_jumlah').value),
+      tarif: parseFloat($('am_tarif').value),
+      tgl: $('am_tgl').value,
+    });
+    closeModal('ambilModal');
+    toast('✓ Barang diambil');
+    await load();
+  } catch(e){
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Simpan';
+  }
+}
+
+/* ═══════ MODAL: SETOR ═══════ */
+function openSetor(jobId){
+  const j = S.jobs.find(x => x.id === jobId);
+  if(!j) return;
+  const d = jobDerivasi(j, S.transactions);
+  S.currentJobId = jobId;
+
+  $('setorInfo').innerHTML = `
+    <div class="info-line"><span>Pekerja</span><span>${escapeHtml(j.worker_nama)}</span></div>
+    <div class="info-line"><span>Barang</span><span>${escapeHtml(j.barang)} ${escapeHtml(j.jenis)}</span></div>
+    <div class="info-line"><span>Ambil</span><span>${j.jumlah_ambil} pcs</span></div>
+    <div class="info-line"><span>Sudah setor</span><span>${d.totalSetor} pcs</span></div>
+    <div class="info-line"><span>Sisa</span><span style="color:var(--warn);">${d.sisaGantungan} pcs</span></div>
+  `;
+  $('st_pcs').value = d.sisaGantungan;
+  $('st_tgl').value = todayISO();
+  $('st_ket').value = '';
+  $('st_alert').innerHTML = '';
+  updateSetorAlert();
+  openModal('setorModal');
+}
+window.openSetor = openSetor;
+
+function updateSetorAlert(){
+  const j = S.jobs.find(x => x.id === S.currentJobId);
+  if(!j) return;
+  const d = jobDerivasi(j, S.transactions);
+  const pcs = parseInt($('st_pcs').value) || 0;
+  const el = $('st_alert');
+  if(pcs <= 0){ el.innerHTML = '<div class="alert danger">Isi jumlah > 0</div>'; return; }
+  if(pcs > d.sisaGantungan){ el.innerHTML = `<div class="alert danger">Melebihi sisa (${d.sisaGantungan} pcs)</div>`; return; }
+  el.innerHTML = `<div class="alert ok">Sisa setelah setor: ${d.sisaGantungan - pcs} pcs</div>`;
+}
+
+async function handleSimpanSetor(){
+  const j = S.jobs.find(x => x.id === S.currentJobId);
+  const btn = $('btnSimpanSetor');
+  btn.disabled = true; btn.textContent = 'MENYIMPAN...';
+  try {
+    await setorBarang({
+      job: j,
+      pcs: parseInt($('st_pcs').value),
+      tgl: $('st_tgl').value,
+      keterangan: $('st_ket').value.trim(),
+    });
+    closeModal('setorModal');
+    toast('✓ Setor tercatat');
+    await load();
+  } catch(e){
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Konfirmasi Setor';
+  }
+}
+
+/* ═══════ MODAL: PENDING ═══════ */
+function openPending(jobId){
+  const j = S.jobs.find(x => x.id === jobId);
+  if(!j) return;
+  S.currentJobId = jobId;
+  const totalSetor = (j.setoran || []).reduce((s, x) => s + (x.pcs || 0), 0);
+  $('pendingInfo').innerHTML = `
+    <div class="info-line"><span>Pekerja</span><span>${escapeHtml(j.worker_nama)}</span></div>
+    <div class="info-line"><span>Barang</span><span>${escapeHtml(j.barang)}</span></div>
+    <div class="info-line"><span>Ambil</span><span>${j.jumlah_ambil} pcs</span></div>
+    <div class="info-line"><span>Setor</span><span>${totalSetor} pcs</span></div>
+    <div class="info-line"><span>Sisa</span><span style="color:var(--danger);">${j.jumlah_ambil - totalSetor} pcs</span></div>
+  `;
+  $('pendingAlasan').value = '';
+  openModal('pendingModal');
+}
+window.openPending = openPending;
+
+async function handleSimpanPending(){
+  const j = S.jobs.find(x => x.id === S.currentJobId);
+  const btn = $('btnSimpanPending');
+  btn.disabled = true; btn.textContent = 'MENYIMPAN...';
+  try {
+    await pendingJob({ job: j, alasan: $('pendingAlasan').value });
+    closeModal('pendingModal');
+    toast('✓ Pending dicatat');
+    await load();
+  } catch(e){
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Konfirmasi Pending';
+  }
+}
+
+/* ═══════ MODAL: BAYAR ═══════ */
+function openBayar(jobId){
+  const j = S.jobs.find(x => x.id === jobId);
+  if(!j) return;
+  const d = jobDerivasi(j, S.transactions);
+  if(d.sisaUpah <= 0){ toast('Tidak ada sisa upah', true); return; }
+
+  S.currentJobId = jobId;
+  $('bayarInfo').innerHTML = `
+    <div class="info-line"><span>Pekerja</span><span>${escapeHtml(j.worker_nama)}</span></div>
+    <div class="info-line"><span>Upah (setor)</span><span>${rp(d.upahSetor)}</span></div>
+    <div class="info-line"><span>Upah (ambil)</span><span>${rp(d.upahAmbil)}</span></div>
+    <div class="info-line"><span>Panjar</span><span>${rp(d.totalPanjar)}</span></div>
+    <div class="info-line"><span>Bayar sebelumnya</span><span>${rp(d.totalBayar)}</span></div>
+    <div class="info-line total"><span>Sisa upah</span><span>${rp(d.sisaUpah)}</span></div>
+  `;
+  $('by_jumlah').value = d.sisaUpah;
+  $('by_tgl').value = todayISO();
+  $('by_ket').value = '';
+  $('by_alert').innerHTML = '';
+  document.querySelector('input[name="basis"][value="setor"]').checked = true;
+  openModal('bayarModal');
+}
+window.openBayar = openBayar;
+
+function updateBayarAlert(){
+  const j = S.jobs.find(x => x.id === S.currentJobId);
+  if(!j) return;
+  const d = jobDerivasi(j, S.transactions);
+  const jumlah = parseFloat($('by_jumlah').value) || 0;
+  const el = $('by_alert');
+  if(jumlah <= 0){ el.innerHTML = ''; return; }
+  if(jumlah > d.sisaUpah){ el.innerHTML = `<div class="alert danger">Melebihi sisa (${rp(d.sisaUpah)})</div>`; return; }
+  el.innerHTML = `<div class="alert ok">Sisa setelah bayar: ${rp(d.sisaUpah - jumlah)}</div>`;
+}
+
+async function handleSimpanBayar(){
+  const j = S.jobs.find(x => x.id === S.currentJobId);
+  const btn = $('btnSimpanBayar');
+  const basis = document.querySelector('input[name="basis"]:checked').value;
+  const periode = S.periods.find(p => p.status === 'aktif');
+  btn.disabled = true; btn.textContent = 'MENYIMPAN...';
+  try {
+    await bayarUpah({
+      job: j,
+      jumlah: parseFloat($('by_jumlah').value),
+      tgl: $('by_tgl').value,
+      keterangan: $('by_ket').value.trim(),
+      basis,
+      roomId: S.room.id,
+      periodeId: periode ? periode.id : null,
+      transactions: S.transactions,
+    });
+    closeModal('bayarModal');
+    toast('✓ Pembayaran tercatat');
+    await load();
+  } catch(e){
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Konfirmasi Bayar';
+  }
+}
+
+/* ═══════ MODAL: BAYAR PENDING ═══════ */
+function openBayarPending(jobId){
+  const j = S.jobs.find(x => x.id === jobId);
+  if(!j) return;
+  if(j.pending_dibayar){ toast('Sudah dibayar', true); return; }
+  S.currentJobId = jobId;
+  const upahDefault = hitungUpah(j.jumlah_ambil, j.tarif);
+  $('bayarPendingInfo').innerHTML = `
+    <div class="info-line"><span>Pekerja</span><span>${escapeHtml(j.worker_nama)}</span></div>
+    <div class="info-line"><span>Barang</span><span>${escapeHtml(j.barang)}</span></div>
+    <div class="info-line"><span>Potensi upah</span><span>${rp(upahDefault)}</span></div>
+    <div class="info-line"><span>Alasan</span><span>${escapeHtml(j.pending_alasan || '-')}</span></div>
+  `;
+  $('bp_jumlah').value = upahDefault;
+  $('bp_catatan').value = 'Sudah dibayar, menunggu setor fisik';
+  openModal('bayarPendingModal');
+}
+window.openBayarPending = openBayarPending;
+
+async function handleSimpanBayarPending(){
+  const j = S.jobs.find(x => x.id === S.currentJobId);
+  const periode = S.periods.find(p => p.status === 'aktif');
+  const btn = $('btnSimpanBayarPending');
+  btn.disabled = true; btn.textContent = 'MENYIMPAN...';
+  try {
+    await bayarPending({
+      job: j,
+      jumlah: parseFloat($('bp_jumlah').value),
+      catatan: $('bp_catatan').value,
+      roomId: S.room.id,
+      periodeId: periode ? periode.id : null,
+    });
+    closeModal('bayarPendingModal');
+    toast('✓ Bayar pending tercatat');
+    await load();
+  } catch(e){
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Konfirmasi Bayar';
+  }
+}
+
+/* ═══════ MODAL: SETOR FISIK PENDING ═══════ */
+function openSetorFisik(jobId){
+  const j = S.jobs.find(x => x.id === jobId);
+  if(!j) return;
+  if(j.status !== 'pending'){ toast('Bukan pending', true); return; }
+  S.currentJobId = jobId;
+  const totalSetor = (j.setoran || []).reduce((s, x) => s + (x.pcs || 0), 0);
+  const sisa = j.jumlah_ambil - totalSetor;
+  $('setorFisikInfo').innerHTML = `
+    <div class="info-line"><span>Pekerja</span><span>${escapeHtml(j.worker_nama)}</span></div>
+    <div class="info-line"><span>Ambil</span><span>${j.jumlah_ambil} pcs</span></div>
+    <div class="info-line"><span>Setor sebelumnya</span><span>${totalSetor} pcs</span></div>
+    <div class="info-line"><span>Sisa</span><span style="color:var(--danger);">${sisa} pcs</span></div>
+  `;
+  $('sf_pcs').value = sisa;
+  $('sf_alert').innerHTML = '';
+  openModal('setorFisikModal');
+}
+window.openSetorFisik = openSetorFisik;
+
+async function handleSimpanSetorFisik(){
+  const j = S.jobs.find(x => x.id === S.currentJobId);
+  const btn = $('btnSimpanSetorFisik');
+  btn.disabled = true; btn.textContent = 'MENYIMPAN...';
+  try {
+    await setorFisikPending({ job: j, pcs: parseInt($('sf_pcs').value) });
+    closeModal('setorFisikModal');
+    toast('✓ Setor fisik tercatat');
+    await load();
+  } catch(e){
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Konfirmasi Setor';
+  }
+}
+
+/* ═══════ INIT ═══════ */
+$('btnLogout').addEventListener('click', doLogout);
+$('btnAmbil').addEventListener('click', openAmbilModal);
+$('btnSimpanAmbil').addEventListener('click', handleSimpanAmbil);
+$('btnSimpanSetor').addEventListener('click', handleSimpanSetor);
+$('btnSimpanPending').addEventListener('click', handleSimpanPending);
+$('btnSimpanBayar').addEventListener('click', handleSimpanBayar);
+$('btnSimpanBayarPending').addEventListener('click', handleSimpanBayarPending);
+$('btnSimpanSetorFisik').addEventListener('click', handleSimpanSetorFisik);
+$('am_jumlah').addEventListener('input', updateAmbilPreview);
+$('am_tarif').addEventListener('input', updateAmbilPreview);
+$('st_pcs').addEventListener('input', updateSetorAlert);
+$('by_jumlah').addEventListener('input', updateBayarAlert);
+$('searchInput').addEventListener('input', e => { S.search = e.target.value; render(); });
+
+// Tutup modal kalau klik background
+document.querySelectorAll('.modal-bg').forEach(bg => {
+  bg.addEventListener('click', e => { if(e.target === bg) bg.classList.remove('show'); });
+});
+
+setInterval(tick, 1000);
+tick();
+
+(async () => {
+  try {
+    await requireAuth();
+    await load();
+    $('bootScreen').style.display = 'none';
+    $('app').style.display = 'block';
+  } catch(e){
+    toast(e.message, true);
+    console.error(e);
+  }
+})();
+</script>
+</body>
+</html>
