@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Monitor Barang — KONVEKSI HUB</title>
+<link rel="stylesheet" href="../assets/css/style.css">
+<link rel="stylesheet" href="../assets/css/components.css">
+</head>
+<body>
+
+<div id="bootScreen" class="boot-screen">
+  <div class="boot-logo">KONVEKSI <span>HUB</span></div>
+  <div class="boot-spinner"></div>
+</div>
+
+<div id="app" style="display:none;">
+  <header>
+    <div class="header-left">
+      <div>
+        <div class="logo">KONVEKSI <span>HUB</span></div>
+        <div class="room-sub" id="roomSub">—</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div class="clock" id="clock">--:--</div>
+      <button class="btn-logout" id="btnLogout">KELUAR</button>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <a href="dashboard.html">🏠 DASHBOARD</a>
+    <a href="jobs.html">📦 PEKERJAAN</a>
+    <a href="warehouse.html" class="active">👁️ MONITOR</a>
+    <a href="payroll.html">💰 PAYROLL</a>
+    <a href="reports.html">📊 LAPORAN</a>
+  </div>
+
+  <div class="page active">
+    <div class="page-header">
+      <div class="ph-left">
+        <div class="ph-title">Monitor Barang</div>
+        <div class="ph-sub">Posisi barang derived dari pekerjaan — bukan input stok</div>
+      </div>
+      <div class="ph-actions">
+        <a href="warehouse-history.html" class="btn btn-ghost btn-sm">📋 Riwayat</a>
+      </div>
+    </div>
+
+    <h2 class="section">Ringkasan Posisi</h2>
+    <div id="statPosisi">
+      <div class="empty">Memuat...</div>
+    </div>
+
+    <div class="alert ok" style="margin-bottom:16px;">
+      ℹ️ <b>Catatan:</b> Tidak ada gudang fisik. Barang "ada" saat pekerja ambil, dan dicatat saat disetor.
+    </div>
+
+    <h2 class="section">Posisi Per Pekerja</h2>
+    <div id="pekerjaPosisi">
+      <div class="empty">Memuat...</div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script type="module">
+import { requireAuth, getActiveRoomId, doLogout } from '../assets/js/auth.js';
+import { Rooms, Workers, Jobs } from '../assets/js/supabase.js';
+import {
+  posisiBarang, posisiPerPekerja,
+  renderStatPosisi, renderPekerjaPosisi,
+} from '../assets/js/warehouse.js';
+
+const $ = id => document.getElementById(id);
+function toast(msg, err){
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = err ? 'show err' : 'show';
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.className = '', 2400);
+}
+
+function tick(){
+  const d = new Date();
+  $('clock').textContent = [d.getHours(), d.getMinutes(), d.getSeconds()]
+    .map(n => String(n).padStart(2,'0')).join(':');
+}
+
+async function init(){
+  await requireAuth();
+  const roomId = getActiveRoomId();
+  if(!roomId) throw new Error('Room belum dipilih');
+
+  const [room, workers, jobs] = await Promise.all([
+    Rooms.get(roomId),
+    Workers.list(roomId),
+    Jobs.list(roomId),
+  ]);
+
+  $('roomSub').textContent = room.nama;
+  document.title = 'Monitor — ' + room.nama;
+
+  const ringkasan = posisiBarang(jobs);
+  const perPekerja = posisiPerPekerja(jobs, workers);
+
+  $('statPosisi').innerHTML = renderStatPosisi(ringkasan);
+  $('pekerjaPosisi').innerHTML = renderPekerjaPosisi(perPekerja);
+
+  $('bootScreen').style.display = 'none';
+  $('app').style.display = 'block';
+}
+
+$('btnLogout').addEventListener('click', doLogout);
+setInterval(tick, 1000);
+tick();
+
+init().catch(e => { toast(e.message, true); console.error(e); });
+</script>
+</body>
+</html>

@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Payroll — KONVEKSI HUB</title>
+<link rel="stylesheet" href="../assets/css/style.css">
+<link rel="stylesheet" href="../assets/css/components.css">
+</head>
+<body>
+
+<div id="bootScreen" class="boot-screen">
+  <div class="boot-logo">KONVEKSI <span>HUB</span></div>
+  <div class="boot-spinner"></div>
+</div>
+
+<div id="app" style="display:none;">
+  <header>
+    <div class="header-left">
+      <div>
+        <div class="logo">KONVEKSI <span>HUB</span></div>
+        <div class="room-sub" id="roomSub">—</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div class="clock" id="clock">--:--</div>
+      <button class="btn-logout" id="btnLogout">KELUAR</button>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <a href="dashboard.html">🏠 DASHBOARD</a>
+    <a href="jobs.html">📦 PEKERJAAN</a>
+    <a href="warehouse.html">👁️ MONITOR</a>
+    <a href="payroll.html" class="active">💰 PAYROLL</a>
+    <a href="reports.html">📊 LAPORAN</a>
+  </div>
+
+  <div class="page active">
+    <div class="page-header">
+      <div class="ph-left">
+        <div class="ph-title">Payroll</div>
+        <div class="ph-sub" id="payrollSub">—</div>
+      </div>
+    </div>
+
+    <h2 class="section">Filter</h2>
+    <select id="filterWorker" style="margin-bottom:8px;">
+      <option value="">— Semua Pekerja —</option>
+    </select>
+
+    <div style="margin-bottom:12px;">
+      <label class="f" style="margin-top:0;">Basis Upah</label>
+      <div style="display:flex;gap:8px;">
+        <label style="flex:1;cursor:pointer;padding:8px;border:1px solid var(--line-2);border-radius:4px;">
+          <input type="radio" name="basisRekap" value="setor" checked style="width:auto;height:auto;margin-right:6px;">
+          <b>Setor</b> (default)
+        </label>
+        <label style="flex:1;cursor:pointer;padding:8px;border:1px solid var(--line-2);border-radius:4px;">
+          <input type="radio" name="basisRekap" value="ambil" style="width:auto;height:auto;margin-right:6px;">
+          <b>Ambil</b> (upah di muka)
+        </label>
+      </div>
+    </div>
+
+    <h2 class="section">Rekap Payroll</h2>
+    <div id="payrollList">
+      <div class="empty">Memuat...</div>
+    </div>
+
+    <h2 class="section">Riwayat Transaksi</h2>
+    <div id="transaksiList">
+      <div class="empty">Memuat...</div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Slip -->
+<div class="modal-bg" id="slipModal">
+  <div class="modal" style="max-width:420px;">
+    <h3>Slip Gaji</h3>
+    <div class="modal-body" id="slipBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('slipModal')">Tutup</button>
+      <button class="btn btn-primary" id="btnPrintSlip">🖨️ Print / PDF</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script type="module">
+import { requireAuth, getActiveRoomId, doLogout } from '../assets/js/auth.js';
+import { Rooms, Workers, Jobs, Transactions, Periods } from '../assets/js/supabase.js';
+import {
+  rekapPerPekerja, renderRekapCard, renderSlipHtml,
+  fmtDate, rp, escapeHtml,
+} from '../assets/js/payroll.js';
+
+const S = {
+  room: null,
+  workers: [],
+  jobs: [],
+  transactions: [],
+  periods: [],
+  filterWorkerId: '',
+  basis: 'setor',
+  slipWorkerId: null,
+};
+
+const $ = id => document.getElementById(id);
+function toast(msg, err){
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = err ? 'show err' : 'show';
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.className = '', 2400);
+}
+function openModal(id){ $(id).classList.add('show'); }
+function closeModal(id){ $(id).classList.remove('show'); }
+window.openModal = openModal;
+window.closeModal = closeModal;
+
+function tick(){
+  const d = new Date();
+  $('clock').textContent = [d.getHours(), d.getMinutes(), d.getSeconds()]
+    .map(n => String(n).padStart(2,'0')).join(':');
+}
+
+async function load(){
+  const roomId = getActiveRoomId();
+  if(!roomId) throw new Error('Room belum dipilih');
+
+  S.room = await Rooms.get(roomId);
+  const [workers, jobs, transactions, periods] = await Promise.all([
+    Workers.list(roomId),
+    Jobs.list(roomId),
+    Transactions.list(roomId),
+    Periods.list(roomId),
+  ]);
+  S.workers = workers;
+  S.jobs = jobs;
+  S.transactions = transactions;
+  S.periods = periods;
+
+  $('roomSub').textContent = S.room.nama;
+  document.title = 'Payroll — ' + S.room.nama;
+
+  // Isi filter pekerja
+  const filterSelect = $('filterWorker');
+  filterSelect.innerHTML = '<option value="">— Semua Pekerja —</option>' +
+    S.workers.map(w => `<option value="${w.id}">${escapeHtml(w.nama)}</option>`).join('');
+  filterSelect.value = S.filterWorkerId;
+
+  render();
+}
+
+function render(){
+  const periode = S.periods.find(p => p.status === 'aktif');
+  $('payrollSub').textContent = periode
+    ? 'Periode ' + fmtDate(periode.mulai + 'T00:00:00') + ' — ' + fmtDate(periode.akhir + 'T00:00:00')
+    : '—';
+
+  // Filter jobs & transactions berdasarkan periode
+  let jobsFiltered = S.jobs;
+  let txFiltered = S.transactions;
+
+  if(periode){
+    const inPeriode = iso => {
+      if(!iso) return false;
+      const tgl = iso.slice(0, 10);
+      return tgl >= periode.mulai && tgl <= periode.akhir;
+    };
+    jobsFiltered = S.jobs.filter(j => {
+      if(inPeriode(j.tgl_ambil)) return true;
+      if((j.setoran || []).some(s => inPeriode(s.tgl))) return true;
+      return false;
+    });
+    txFiltered = S.transactions.filter(t => {
+      if(t.periode_id === periode.id) return true;
+      return inPeriode(t.tgl);
+    });
+  }
+
+  const rekap = rekapPerPekerja(jobsFiltered, txFiltered, S.workers, {
+    basis: S.basis,
+    filterWorkerId: S.filterWorkerId || null,
+  });
+
+  $('payrollList').innerHTML = rekap.length === 0
+    ? '<div class="empty"><span class="big">💰</span>Belum ada data payroll</div>'
+    : rekap.map(w => renderRekapCard(w)).join('');
+
+  // Riwayat transaksi
+  let txList = txFiltered;
+  if(S.filterWorkerId){
+    txList = txList.filter(t => t.worker_id === S.filterWorkerId);
+  }
+  txList = txList.slice(0, 30);
+
+  $('transaksiList').innerHTML = txList.length === 0
+    ? '<div class="empty">Belum ada transaksi</div>'
+    : txList.map(t => {
+      const w = S.workers.find(x => x.id === t.worker_id);
+      return `<div class="card">
+        <div class="card-info">${t.jenis === 'panjar' ? '🟡 Panjar' : '💰 Bayar'} — <b>${escapeHtml(w?.nama || '—')}</b> — ${rp(t.jumlah)}</div>
+        <div class="card-info" style="font-size:0.72rem;">${fmtDate(t.tgl)}${t.keterangan ? ' • ' + escapeHtml(t.keterangan) : ''}</div>
+      </div>`;
+    }).join('');
+}
+
+/* ═══════ SLIP ═══════ */
+window.openSlip = async function(workerId){
+  S.slipWorkerId = workerId;
+  const worker = S.workers.find(w => w.id === workerId);
+  if(!worker){ toast('Pekerja tidak ditemukan', true); return; }
+
+  const periode = S.periods.find(p => p.status === 'aktif');
+  let jobsFiltered = S.jobs.filter(j => j.worker_id === workerId);
+  let txFiltered = S.transactions.filter(t => t.worker_id === workerId);
+
+  if(periode){
+    const inPeriode = iso => {
+      if(!iso) return false;
+      const tgl = iso.slice(0, 10);
+      return tgl >= periode.mulai && tgl <= periode.akhir;
+    };
+    jobsFiltered = jobsFiltered.filter(j => {
+      if(inPeriode(j.tgl_ambil)) return true;
+      if((j.setoran || []).some(s => inPeriode(s.tgl))) return true;
+      return false;
+    });
+    txFiltered = txFiltered.filter(t => {
+      if(t.periode_id === periode.id) return true;
+      return inPeriode(t.tgl);
+    });
+  }
+
+  if(jobsFiltered.length === 0 && txFiltered.length === 0){
+    toast('Belum ada data untuk slip', true);
+    return;
+  }
+
+  const html = renderSlipHtml({
+    worker,
+    jobs: jobsFiltered,
+    transactions: txFiltered,
+    room: S.room,
+    periode,
+  });
+
+  $('slipBody').innerHTML = '<div id="printArea">' + html + '</div>';
+  openModal('slipModal');
+};
+
+function handlePrintSlip(){
+  window.print();
+}
+
+/* ═══════ INIT ═══════ */
+$('btnLogout').addEventListener('click', doLogout);
+$('btnPrintSlip').addEventListener('click', handlePrintSlip);
+
+$('filterWorker').addEventListener('change', e => {
+  S.filterWorkerId = e.target.value;
+  render();
+});
+
+document.querySelectorAll('input[name="basisRekap"]').forEach(r => {
+  r.addEventListener('change', e => {
+    S.basis = e.target.value;
+    render();
+  });
+});
+
+document.querySelectorAll('.modal-bg').forEach(bg => {
+  bg.addEventListener('click', e => { if(e.target === bg) bg.classList.remove('show'); });
+});
+
+setInterval(tick, 1000);
+tick();
+
+(async () => {
+  try {
+    await requireAuth();
+    await load();
+    $('bootScreen').style.display = 'none';
+    $('app').style.display = 'block';
+  } catch(e){
+    toast(e.message, true);
+    console.error(e);
+  }
+})();
+</script>
+</body>
+</html>

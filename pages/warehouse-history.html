@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Riwayat Movement — KONVEKSI HUB</title>
+<link rel="stylesheet" href="../assets/css/style.css">
+<link rel="stylesheet" href="../assets/css/components.css">
+</head>
+<body>
+
+<div id="bootScreen" class="boot-screen">
+  <div class="boot-logo">KONVEKSI <span>HUB</span></div>
+  <div class="boot-spinner"></div>
+</div>
+
+<div id="app" style="display:none;">
+  <header>
+    <div class="header-left">
+      <a href="warehouse.html" class="btn-back">←</a>
+      <div>
+        <div class="logo">KONVEKSI <span>HUB</span></div>
+        <div class="room-sub" id="roomSub">—</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div class="clock" id="clock">--:--</div>
+      <button class="btn-logout" id="btnLogout">KELUAR</button>
+    </div>
+  </header>
+
+  <div class="page active">
+    <div class="page-header">
+      <div class="ph-left">
+        <div class="ph-title">Riwayat Movement</div>
+        <div class="ph-sub" id="historySub">Semua pergerakan barang (derived)</div>
+      </div>
+    </div>
+
+    <div class="chip-row" id="filterRow">
+      <div class="chip active" data-filter="semua">Semua</div>
+      <div class="chip" data-filter="ambil">Ambil</div>
+      <div class="chip" data-filter="setor">Setor</div>
+      <div class="chip" data-filter="pending">Pending</div>
+    </div>
+
+    <div id="movementList">
+      <div class="empty">Memuat...</div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script type="module">
+import { requireAuth, getActiveRoomId, doLogout } from '../assets/js/auth.js';
+import { Rooms, Jobs } from '../assets/js/supabase.js';
+import { riwayatMovement, renderRiwayatMovement } from '../assets/js/warehouse.js';
+
+const S = { movements: [], filter: 'semua' };
+
+const $ = id => document.getElementById(id);
+function toast(msg, err){
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = err ? 'show err' : 'show';
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.className = '', 2400);
+}
+
+function tick(){
+  const d = new Date();
+  $('clock').textContent = [d.getHours(), d.getMinutes(), d.getSeconds()]
+    .map(n => String(n).padStart(2,'0')).join(':');
+}
+
+function render(){
+  let filtered = S.movements;
+  if(S.filter !== 'semua'){
+    filtered = S.movements.filter(m => m.tipe === S.filter);
+  }
+  $('historySub').textContent = filtered.length + ' movement';
+  $('movementList').innerHTML = renderRiwayatMovement(filtered, 100);
+}
+
+async function init(){
+  await requireAuth();
+  const roomId = getActiveRoomId();
+  if(!roomId) throw new Error('Room belum dipilih');
+
+  const [room, jobs] = await Promise.all([
+    Rooms.get(roomId),
+    Jobs.list(roomId),
+  ]);
+
+  $('roomSub').textContent = room.nama;
+  document.title = 'Riwayat Movement — ' + room.nama;
+
+  S.movements = riwayatMovement(jobs);
+  render();
+
+  $('bootScreen').style.display = 'none';
+  $('app').style.display = 'block';
+}
+
+$('btnLogout').addEventListener('click', doLogout);
+
+document.querySelectorAll('.chip').forEach(c => {
+  c.onclick = () => {
+    S.filter = c.dataset.filter;
+    document.querySelectorAll('.chip').forEach(x => x.classList.toggle('active', x === c));
+    render();
+  };
+});
+
+setInterval(tick, 1000);
+tick();
+
+init().catch(e => { toast(e.message, true); console.error(e); });
+</script>
+</body>
+</html>

@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Laporan — KONVEKSI HUB</title>
+<link rel="stylesheet" href="../assets/css/style.css">
+<link rel="stylesheet" href="../assets/css/components.css">
+</head>
+<body>
+
+<div id="bootScreen" class="boot-screen">
+  <div class="boot-logo">KONVEKSI <span>HUB</span></div>
+  <div class="boot-spinner"></div>
+</div>
+
+<div id="app" style="display:none;">
+  <header>
+    <div class="header-left">
+      <div>
+        <div class="logo">KONVEKSI <span>HUB</span></div>
+        <div class="room-sub" id="roomSub">—</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div class="clock" id="clock">--:--</div>
+      <button class="btn-logout" id="btnLogout">KELUAR</button>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <a href="dashboard.html">🏠 DASHBOARD</a>
+    <a href="jobs.html">📦 PEKERJAAN</a>
+    <a href="warehouse.html">👁️ MONITOR</a>
+    <a href="payroll.html">💰 PAYROLL</a>
+    <a href="reports.html" class="active">📊 LAPORAN</a>
+  </div>
+
+  <div class="page active">
+    <div class="page-header">
+      <div class="ph-left">
+        <div class="ph-title">Laporan</div>
+        <div class="ph-sub" id="reportsSub">—</div>
+      </div>
+    </div>
+
+    <h2 class="section">Periode Aktif</h2>
+    <div id="ringkasanPeriode">
+      <div class="empty">Memuat...</div>
+    </div>
+
+    <div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap;">
+      <button class="btn btn-ghost btn-sm" id="btnUbahPeriode">✏️ Ubah Periode</button>
+      <button class="btn btn-warn btn-sm" id="btnTutupPeriode">🔒 Tutup Periode</button>
+    </div>
+
+    <h2 class="section">Pengaturan</h2>
+    <div class="card">
+      <div class="card-head">
+        <span class="card-code">TARIF DEFAULT</span>
+      </div>
+      <div class="card-info">Tarif default: <b id="tarifValue">—</b> / lusin</div>
+      <button class="btn btn-ghost btn-sm" id="btnUbahTarif">✏️ Ubah Tarif</button>
+    </div>
+
+    <h2 class="section">Backup / Restore</h2>
+    <button class="btn btn-done btn-block" id="btnBackup">💾 Backup JSON</button>
+    <button class="btn btn-ghost btn-block" id="btnRestore" style="margin-top:6px;">📥 Restore dari JSON</button>
+    <input type="file" id="fileRestore" accept=".json,application/json" style="display:none;">
+
+    <h2 class="section">Riwayat Periode</h2>
+    <div id="riwayatPeriode">
+      <div class="empty">Memuat...</div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Ubah Periode -->
+<div class="modal-bg" id="periodeModal">
+  <div class="modal">
+    <h3>✏️ Ubah Periode Aktif</h3>
+    <div class="modal-body">
+      <label class="f">Mulai (Sabtu)</label>
+      <input type="date" id="pm_mulai">
+      <label class="f">Akhir (Jumat)</label>
+      <input type="date" id="pm_akhir">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('periodeModal')">Batal</button>
+      <button class="btn btn-done" id="btnSimpanPeriode">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Ubah Tarif -->
+<div class="modal-bg" id="tarifModal">
+  <div class="modal">
+    <h3>Ubah Tarif Default</h3>
+    <div class="modal-body">
+      <label class="f">Tarif per Lusin (Rp)</label>
+      <input type="number" id="tm_tarif" inputmode="numeric">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('tarifModal')">Batal</button>
+      <button class="btn btn-done" id="btnSimpanTarif">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Konfirmasi Tutup Periode -->
+<div class="modal-bg" id="tutupModal">
+  <div class="modal">
+    <h3>🔒 Tutup Periode?</h3>
+    <div class="modal-body">
+      <div id="tutupInfo"></div>
+      <div class="alert warn" style="margin-top:10px;">
+        ⚠️ Setelah ditutup, periode baru akan otomatis dibuat. Data lama tetap tercatat.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('tutupModal')">Batal</button>
+      <button class="btn btn-warn" id="btnKonfirmasiTutup">Tutup Periode</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script type="module">
+import { requireAuth, getActiveRoomId, doLogout } from '../assets/js/auth.js';
+import { Rooms, Workers, Jobs, Transactions, Periods, Tarifs } from '../assets/js/supabase.js';
+import {
+  periodeAktif, hitungSnapshot, tutupPeriode, ubahPeriode, simpanTarif, backupJSON,
+  renderRingkasanPeriode, renderRiwayatPeriode,
+  fmtDate, rp, escapeHtml, todayISO,
+} from '../assets/js/reports.js';
+
+const S = {
+  room: null,
+  workers: [],
+  jobs: [],
+  transactions: [],
+  periods: [],
+  tarif: { tarif: 8000 },
+};
+
+const $ = id => document.getElementById(id);
+function toast(msg, err){
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = err ? 'show err' : 'show';
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.className = '', 2400);
+}
+function openModal(id){ $(id).classList.add('show'); }
+function closeModal(id){ $(id).classList.remove('show'); }
+window.openModal = openModal;
+window.closeModal = closeModal;
+
+function tick(){
+  const d = new Date();
+  $('clock').textContent = [d.getHours(), d.getMinutes(), d.getSeconds()]
+    .map(n => String(n).padStart(2,'0')).join(':');
+}
+
+async function load(){
+  const roomId = getActiveRoomId();
+  if(!roomId) throw new Error('Room belum dipilih');
+
+  S.room = await Rooms.get(roomId);
+  const [workers, jobs, transactions, periods, tarif] = await Promise.all([
+    Workers.list(roomId),
+    Jobs.list(roomId),
+    Transactions.list(roomId),
+    Periods.list(roomId),
+    Tarifs.get(roomId),
+  ]);
+  S.workers = workers;
+  S.jobs = jobs;
+  S.transactions = transactions;
+  S.periods = periods;
+  S.tarif = tarif;
+
+  $('roomSub').textContent = S.room.nama;
+  document.title = 'Laporan — ' + S.room.nama;
+
+  render();
+}
+
+function render(){
+  const periode = periodeAktif(S.periods);
+
+  if(periode){
+    const ringkasan = hitungSnapshot(S.jobs, S.transactions, periode);
+    $('ringkasanPeriode').innerHTML = renderRingkasanPeriode(periode, ringkasan);
+    $('reportsSub').textContent = 'Periode aktif: ' + fmtDate(periode.mulai + 'T00:00:00') + ' — ' + fmtDate(periode.akhir + 'T00:00:00');
+  } else {
+    $('ringkasanPeriode').innerHTML = '<div class="empty">Belum ada periode aktif</div>';
+    $('reportsSub').textContent = 'Belum ada periode aktif';
+  }
+
+  $('tarifValue').textContent = rp(S.tarif.tarif);
+  $('riwayatPeriode').innerHTML = renderRiwayatPeriode(S.periods);
+}
+
+/* ═══════ UBAH PERIODE ═══════ */
+function openUbahPeriode(){
+  const p = periodeAktif(S.periods);
+  if(!p){ toast('Belum ada periode aktif', true); return; }
+  $('pm_mulai').value = p.mulai;
+  $('pm_akhir').value = p.akhir;
+  openModal('periodeModal');
+}
+
+async function handleSimpanPeriode(){
+  const btn = $('btnSimpanPeriode');
+  btn.disabled = true; btn.textContent = 'MENYIMPAN...';
+  try {
+    const p = periodeAktif(S.periods);
+    await ubahPeriode({
+      periode: p,
+      mulai: $('pm_mulai').value,
+      akhir: $('pm_akhir').value,
+    });
+    closeModal('periodeModal');
+    toast('✓ Periode diubah');
+    await load();
+  } catch(e){
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Simpan';
+  }
+}
+
+/* ═══════ TUTUP PERIODE ═══════ */
+function openTutupPeriode(){
+  const p = periodeAktif(S.periods);
+  if(!p){ toast('Belum ada periode aktif', true); return; }
+  const ringkasan = hitungSnapshot(S.jobs, S.transactions, p);
+  const aktifJobs = S.jobs.filter(j => j.status !== 'selesai');
+
+  $('tutupInfo').innerHTML = `
+    <div class="info-line"><span>Periode</span><span>${fmtDate(p.mulai + 'T00:00:00')} — ${fmtDate(p.akhir + 'T00:00:00')}</span></div>
+    <div class="info-line"><span>Pcs disetor</span><span>${ringkasan.totalSetor} pcs</span></div>
+    <div class="info-line"><span>Upah hak</span><span>${rp(ringkasan.totalUpahHak)}</span></div>
+    <div class="info-line"><span>Sisa upah</span><span>${rp(ringkasan.totalSisaUpah)}</span></div>
+    ${aktifJobs.length > 0 ? `
+      <div class="alert warn" style="margin-top:10px;">
+        ⚠️ Masih ada ${aktifJobs.length} pekerjaan belum selesai.
+        Pekerjaan akan tetap tercatat dan muncul di periode berikutnya.
+      </div>
+    ` : ''}
+  `;
+  openModal('tutupModal');
+}
+
+async function handleTutupPeriode(){
+  const btn = $('btnKonfirmasiTutup');
+  btn.disabled = true; btn.textContent = 'MENUTUP...';
+  try {
+    const p = periodeAktif(S.periods);
+    await tutupPeriode({
+      periode: p,
+      jobs: S.jobs,
+      transactions: S.transactions,
+      roomId: S.room.id,
+    });
+    closeModal('tutupModal');
+    toast('✓ Periode ditutup, periode baru dibuka');
+    await load();
+  } catch(e){
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Tutup Periode';
+  }
+}
+
+/* ═══════ UBAH TARIF ═══════ */
+function openUbahTarif(){
+  $('tm_tarif').value = S.tarif.tarif;
+  openModal('tarifModal');
+}
+
+async function handleSimpanTarif(){
+  const btn = $('btnSimpanTarif');
+  btn.disabled = true; btn.textContent = 'MENYIMPAN...';
+  try {
+    const t = await simpanTarif(S.room.id, $('tm_tarif').value);
+    S.tarif.tarif = t;
+    closeModal('tarifModal');
+    toast('✓ Tarif disimpan');
+    render();
+  } catch(e){
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Simpan';
+  }
+}
+
+/* ═══════ BACKUP ═══════ */
+function handleBackup(){
+  backupJSON({
+    room: S.room,
+    workers: S.workers,
+    jobs: S.jobs,
+    transactions: S.transactions,
+    periods: S.periods,
+    tarif: S.tarif,
+  });
+  toast('✓ Backup diunduh');
+}
+
+function handleRestore(ev){
+  const file = ev.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try {
+      const data = JSON.parse(e.target.result);
+      if(!confirm('Restore akan MENGGANTI data di layar (tidak mengubah database). Lanjutkan?')) return;
+      S.workers = data.workers || S.workers;
+      S.jobs = data.jobs || S.jobs;
+      S.transactions = data.transactions || S.transactions;
+      S.periods = data.periods || S.periods;
+      S.tarif = data.tarif || S.tarif;
+      toast('✓ Data dipulihkan di layar. Reload untuk sinkron database.');
+      render();
+    } catch(err){
+      toast('File rusak: ' + err.message, true);
+    }
+  };
+  reader.readAsText(file);
+  ev.target.value = '';
+}
+
+/* ═══════ INIT ═══════ */
+$('btnLogout').addEventListener('click', doLogout);
+$('btnUbahPeriode').addEventListener('click', openUbahPeriode);
+$('btnTutupPeriode').addEventListener('click', openTutupPeriode);
+$('btnSimpanPeriode').addEventListener('click', handleSimpanPeriode);
+$('btnKonfirmasiTutup').addEventListener('click', handleTutupPeriode);
+$('btnUbahTarif').addEventListener('click', openUbahTarif);
+$('btnSimpanTarif').addEventListener('click', handleSimpanTarif);
+$('btnBackup').addEventListener('click', handleBackup);
+$('btnRestore').addEventListener('click', () => $('fileRestore').click());
+$('fileRestore').addEventListener('change', handleRestore);
+
+document.querySelectorAll('.modal-bg').forEach(bg => {
+  bg.addEventListener('click', e => { if(e.target === bg) bg.classList.remove('show'); });
+});
+
+setInterval(tick, 1000);
+tick();
+
+(async () => {
+  try {
+    await requireAuth();
+    await load();
+    $('bootScreen').style.display = 'none';
+    $('app').style.display = 'block';
+  } catch(e){
+    toast(e.message, true);
+    console.error(e);
+  }
+})();
+</script>
+</body>
+</html>

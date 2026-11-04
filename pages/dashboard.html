@@ -37,27 +37,57 @@
   </div>
 
   <div class="page active">
+
+    <!-- PAGE HEADER -->
     <div class="page-header">
       <div class="ph-left">
         <div class="ph-title">Dashboard</div>
         <div class="ph-sub" id="periodeLabel">—</div>
       </div>
+      <div class="ph-actions" style="flex-wrap:wrap;">
+        <a href="workers.html" class="btn btn-ghost btn-sm">👷 Pekerja</a>
+        <a href="jobs.html" class="btn btn-primary btn-sm">+ Ambil Barang</a>
+      </div>
     </div>
 
+    <!-- RINGKASAN -->
     <h2 class="section">Ringkasan Periode</h2>
     <div class="stat-grid" id="statGrid">
       <div class="empty">Memuat...</div>
     </div>
 
+    <!-- KALENDER MINI (WFM) -->
+    <h2 class="section">Kalender Mingguan</h2>
+    <div class="card" id="kalenderCard">
+      <div class="empty" style="padding:16px;">Memuat...</div>
+    </div>
+
+    <!-- PEKERJA AKTIF -->
     <h2 class="section">Pekerja Aktif</h2>
     <div id="pekerjaAktifList">
       <div class="empty">Memuat...</div>
     </div>
 
+    <!-- PENDING PERLU PERHATIAN -->
+    <div id="pendingSection" style="display:none;">
+      <h2 class="section">⏸️ Pending Perlu Perhatian</h2>
+      <div id="pendingList"></div>
+    </div>
+
+    <!-- AKSI CEPAT -->
+    <h2 class="section">Aksi Cepat</h2>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+      <a href="jobs.html" class="btn btn-primary btn-sm">+ Ambil Barang</a>
+      <a href="payroll.html" class="btn btn-done btn-sm">💰 Bayar Upah</a>
+      <a href="warehouse.html" class="btn btn-ghost btn-sm">👁️ Monitor</a>
+    </div>
+
+    <!-- TRANSAKSI TERAKHIR -->
     <h2 class="section">5 Transaksi Terakhir</h2>
     <div id="transaksiList">
       <div class="empty">Memuat...</div>
     </div>
+
   </div>
 </div>
 
@@ -66,8 +96,21 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script type="module">
 import { requireAuth, getActiveRoomId, doLogout } from '../assets/js/auth.js';
-import { Rooms, loadRoomData, hitungUpah, getBebanPerPekerja } from '../assets/js/supabase.js';
+import {
+  Rooms, Workers, Jobs, Transactions, Periods,
+  hitungUpah, getBebanPerPekerja,
+} from '../assets/js/supabase.js';
 
+/* ═══════ STATE ═══════ */
+const S = {
+  room: null,
+  workers: [],
+  jobs: [],
+  transactions: [],
+  periods: [],
+};
+
+/* ═══════ UTIL ═══════ */
 const $ = id => document.getElementById(id);
 
 function toast(msg, err){
@@ -78,85 +121,331 @@ function toast(msg, err){
   t._t = setTimeout(() => t.className = '', 2400);
 }
 
+function rp(n){
+  return 'Rp' + Math.round(n || 0).toLocaleString('id-ID');
+}
+
+function escapeHtml(s){
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function fmtDate(iso){
+  if(!iso) return '—';
+  const d = new Date(iso);
+  const b = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+  return d.getDate() + ' ' + b[d.getMonth()] + ' ' + d.getFullYear();
+}
+
 function tick(){
   const d = new Date();
   $('clock').textContent = [d.getHours(), d.getMinutes(), d.getSeconds()]
-    .map(n => String(n).padStart(2,'0')).join(':');
+    .map(n => String(n).padStart(2, '0')).join(':');
 }
 
+/* ═══════ DERIVASI ═══════ */
+function isWorkerTerkunci(workerId, jobs){
+  return jobs.some(j =>
+    j.worker_id === workerId &&
+    j.status !== 'selesai' &&
+    j.status !== 'pending'
+  );
+}
+
+function durasiPendingHari(job){
+  if(job.status !== 'pending' || !job.pending_at) return 0;
+  return Math.floor((Date.now() - new Date(job.pending_at).getTime()) / 86400000);
+}
+
+/* ═══════ LOAD ═══════ */
 async function init(){
   const session = await requireAuth();
   if(!session) return;
 
   const roomId = getActiveRoomId();
-  if(!roomId){ toast('Pilih room dulu', true); return; }
+  if(!roomId){
+    toast('Room belum dipilih', true);
+    return;
+  }
 
-  const room = await Rooms.get(roomId);
-  $('roomSub').textContent = room.nama + ' • ' + (session.profile?.nama || '');
-  document.title = room.nama + ' — KONVEKSI HUB';
+  S.room = await Rooms.get(roomId);
+  const [workers, jobs, transactions, periods] = await Promise.all([
+    Workers.list(roomId),
+    Jobs.list(roomId),
+    Transactions.list(roomId),
+    Periods.list(roomId),
+  ]);
+  S.workers = workers;
+  S.jobs = jobs;
+  S.transactions = transactions;
+  S.periods = periods;
 
-  const data = await loadRoomData(roomId);
-  const { jobs, transactions, periods, workers } = data;
+  $('roomSub').textContent = S.room.nama + ' • ' + (session.profile?.nama || '');
+  document.title = S.room.nama + ' — KONVEKSI HUB';
 
-  const periode = periods.find(p => p.status === 'aktif');
+  render();
+}
+
+/* ═══════ RENDER ═══════ */
+function render(){
+  const periode = S.periods.find(p => p.status === 'aktif');
+
+  // ── Periode label ──
   if(periode){
-    const fmt = d => {
-      const dt = new Date(d+'T00:00:00');
-      const b = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
-      return dt.getDate()+' '+b[dt.getMonth()]+' '+dt.getFullYear();
-    };
-    $('periodeLabel').textContent = fmt(periode.mulai) + ' — ' + fmt(periode.akhir);
+    $('periodeLabel').textContent = fmtDate(periode.mulai + 'T00:00:00') + ' — ' + fmtDate(periode.akhir + 'T00:00:00');
   } else {
     $('periodeLabel').textContent = 'Belum ada periode aktif';
   }
 
-  const aktifWorkers = workers.filter(w => w.aktif);
-  const bebanData = await getBebanPerPekerja(roomId);
-  const totalBeban = bebanData.reduce((s, w) => s + w.beban, 0);
-  const totalPending = bebanData.reduce((s, w) => s + w.pending, 0);
+  // ── Filter jobs & transactions berdasarkan periode ──
+  let jobsPeriode = S.jobs;
+  let txPeriode = S.transactions;
 
+  if(periode){
+    const inPeriode = iso => {
+      if(!iso) return false;
+      const tgl = iso.slice(0, 10);
+      return tgl >= periode.mulai && tgl <= periode.akhir;
+    };
+    jobsPeriode = S.jobs.filter(j => {
+      if(inPeriode(j.tgl_ambil)) return true;
+      if((j.setoran || []).some(s => inPeriode(s.tgl))) return true;
+      if(S.transactions.some(t => t.job_id === j.id && inPeriode(t.tgl))) return true;
+      return false;
+    });
+    txPeriode = S.transactions.filter(t => {
+      if(t.periode_id === periode.id) return true;
+      return inPeriode(t.tgl);
+    });
+  }
+
+  // ── Hitung statistik ──
+  const aktifWorkers = S.workers.filter(w => w.aktif);
+  const tersedia = aktifWorkers.filter(w => !isWorkerTerkunci(w.id, S.jobs));
+  const terkunci = aktifWorkers.filter(w => isWorkerTerkunci(w.id, S.jobs));
+
+  let totalAmbil = 0;
+  let totalSetor = 0;
+  let totalGantungan = 0;
+  let totalPending = 0;
+  let totalUpahHak = 0;
+  let totalPanjar = 0;
   let totalBayar = 0;
-  transactions.forEach(t => { if(t.jenis === 'pembayaran') totalBayar += Number(t.jumlah || 0); });
 
+  jobsPeriode.forEach(j => {
+    if(periode && j.tgl_ambil >= periode.mulai && j.tgl_ambil <= periode.akhir){
+      totalAmbil += j.jumlah_ambil;
+    }
+    const setorPeriode = (j.setoran || [])
+      .filter(s => !periode || (s.tgl >= periode.mulai && s.tgl <= periode.akhir))
+      .reduce((s, x) => s + (x.pcs || 0), 0);
+
+    totalSetor += setorPeriode;
+    totalUpahHak += hitungUpah(setorPeriode, j.tarif);
+
+    const totalSetorAll = (j.setoran || []).reduce((s, x) => s + (x.pcs || 0), 0);
+    const sisa = Math.max(0, j.jumlah_ambil - totalSetorAll);
+
+    if(j.status === 'pending'){
+      totalPending += sisa;
+    } else if(j.status !== 'selesai'){
+      totalGantungan += sisa;
+    }
+  });
+
+  txPeriode.forEach(t => {
+    if(t.jenis === 'panjar') totalPanjar += Number(t.jumlah || 0);
+    if(t.jenis === 'pembayaran') totalBayar += Number(t.jumlah || 0);
+  });
+
+  const totalSisaUpah = Math.max(0, totalUpahHak - totalPanjar - totalBayar);
+
+  // ── Render stat grid ──
   $('statGrid').innerHTML = `
     <div class="stat-box"><div class="lbl">Pekerja Aktif</div><div class="val">${aktifWorkers.length}</div></div>
-    <div class="stat-box warn"><div class="lbl">Beban (pcs)</div><div class="val warn">${totalBeban}</div></div>
-    <div class="stat-box danger"><div class="lbl">Pending (pcs)</div><div class="val danger">${totalPending}</div></div>
-    <div class="stat-box ok"><div class="lbl">Sudah Dibayar</div><div class="val ok">Rp${totalBayar.toLocaleString('id-ID')}</div></div>
+    <div class="stat-box ok"><div class="lbl">Tersedia</div><div class="val ok">${tersedia.length}</div></div>
+    <div class="stat-box warn"><div class="lbl">Terkunci</div><div class="val warn">${terkunci.length}</div></div>
+    <div class="stat-box warn"><div class="lbl">Gantungan</div><div class="val warn">${totalGantungan} pcs</div></div>
+    <div class="stat-box danger"><div class="lbl">Pending</div><div class="val danger">${totalPending} pcs</div></div>
+    <div class="stat-box ok"><div class="lbl">Pcs Disetor</div><div class="val ok">${totalSetor}</div></div>
+    <div class="stat-box"><div class="lbl">Upah Hak</div><div class="val">${rp(totalUpahHak)}</div></div>
+    <div class="stat-box warn"><div class="lbl">Panjar</div><div class="val warn">${rp(totalPanjar)}</div></div>
+    <div class="stat-box ok"><div class="lbl">Bayar</div><div class="val ok">${rp(totalBayar)}</div></div>
+    <div class="stat-box danger"><div class="lbl">Sisa Upah</div><div class="val danger">${rp(totalSisaUpah)}</div></div>
   `;
+
+  // ── Kalender mini mingguan ──
+  renderKalender(periode, jobsPeriode);
+
+  // ── Pekerja aktif (view all) ──
+  renderPekerjaAktif();
+
+  // ── Pending perlu perhatian ──
+  renderPendingPerhatian();
+
+  // ── 5 transaksi terakhir ──
+  renderTransaksiTerakhir(txPeriode);
+}
+
+/* ═══════ KALENDER MINI (WFM) ═══════ */
+function renderKalender(periode, jobsPeriode){
+  if(!periode){
+    $('kalenderCard').innerHTML = '<div class="empty">Belum ada periode aktif</div>';
+    return;
+  }
+
+  // Buat 7 hari dari periode
+  const mulai = new Date(periode.mulai + 'T00:00:00');
+  const hariArr = [];
+  const hariNama = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
+
+  for(let i = 0; i < 7; i++){
+    const d = new Date(mulai);
+    d.setDate(mulai.getDate() + i);
+    const p = n => String(n).padStart(2, '0');
+    const iso = d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+
+    const jobHariIni = jobsPeriode.filter(j => {
+      if((j.tgl_ambil || '').slice(0, 10) === iso) return true;
+      if((j.setoran || []).some(s => (s.tgl || '').slice(0, 10) === iso)) return true;
+      return false;
+    });
+
+    const totalPcs = jobHariIni.reduce((s, j) => {
+      let pcs = 0;
+      if((j.tgl_ambil || '').slice(0, 10) === iso) pcs += j.jumlah_ambil;
+      (j.setoran || []).forEach(st => {
+        if((st.tgl || '').slice(0, 10) === iso) pcs += st.pcs;
+      });
+      return s + pcs;
+    }, 0);
+
+    hariArr.push({
+      iso,
+      tgl: d.getDate(),
+      nama: hariNama[d.getDay()],
+      jobCount: jobHariIni.length,
+      totalPcs,
+      isHariIni: iso === new Date().toISOString().slice(0, 10),
+    });
+  }
+
+  $('kalenderCard').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;">
+      ${hariArr.map(h => `
+        <div style="text-align:center;padding:6px 2px;border:1px solid var(--line);border-radius:4px;${h.isHariIni ? 'background:var(--primary-soft);border-color:var(--primary-line);' : ''}${h.jobCount > 0 ? 'font-weight:700;' : ''}">
+          <div style="font-size:0.65rem;color:var(--dim);">${h.nama}</div>
+          <div style="font-size:0.95rem;font-weight:700;color:${h.isHariIni ? 'var(--primary)' : 'var(--txt)'};">${h.tgl}</div>
+          ${h.jobCount > 0 ? `
+            <div style="font-size:0.65rem;color:var(--ok);margin-top:2px;">${h.jobCount} job</div>
+            <div style="font-size:0.62rem;color:var(--dim-2);">${h.totalPcs} pcs</div>
+          ` : `
+            <div style="font-size:0.6rem;color:var(--dim-2);margin-top:4px;">—</div>
+          `}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+/* ═══════ PEKERJA AKTIF ═══════ */
+async function renderPekerjaAktif(){
+  const bebanData = await getBebanPerPekerja(S.room.id);
 
   if(bebanData.length === 0){
     $('pekerjaAktifList').innerHTML = '<div class="empty">Belum ada beban kerja</div>';
-  } else {
-    $('pekerjaAktifList').innerHTML = bebanData.map(w => `
-      <div class="card">
-        <div class="card-name">${w.worker_nama}</div>
-        <div class="card-info">Beban: <b>${w.beban} pcs</b> • Pending: <b>${w.pending} pcs</b> • ${w.jumlah_job} job</div>
+    return;
+  }
+
+  // Urutkan: pending dulu, lalu beban terbesar
+  bebanData.sort((a, b) => {
+    if(a.pending > 0 && b.pending === 0) return -1;
+    if(b.pending > 0 && a.pending === 0) return 1;
+    return b.beban - a.beban;
+  });
+
+  $('pekerjaAktifList').innerHTML = bebanData.map(w => {
+    const adaPending = w.pending > 0;
+    return `
+      <div class="card ${adaPending ? 'gantung' : ''}">
+        <div class="card-name">${escapeHtml(w.worker_nama)}</div>
+        <div class="card-info">
+          📦 Beban: <b>${w.beban} pcs</b>
+          ${adaPending ? ` • ⏸️ Pending: <b style="color:var(--danger);">${w.pending} pcs</b>` : ''}
+          • ${w.jumlah_job} job
+        </div>
+        <a href="worker-detail.html?id=${w.worker_id}" class="btn btn-ghost btn-sm">👤 Lihat Profil</a>
       </div>
-    `).join('');
-  }
-
-  const lastTx = transactions.slice(0, 5);
-  if(lastTx.length === 0){
-    $('transaksiList').innerHTML = '<div class="empty">Belum ada transaksi</div>';
-  } else {
-    $('transaksiList').innerHTML = lastTx.map(t => {
-      const w = workers.find(x => x.id === t.worker_id);
-      return `<div class="card ${t.jenis === 'panjar' ? 'gantung' : 'done'}">
-        <div class="card-info">${t.jenis === 'panjar' ? '🟡 Panjar' : '💰 Bayar'} — <b>${w?.nama || '—'}</b> — Rp${Number(t.jumlah).toLocaleString('id-ID')}</div>
-      </div>`;
-    }).join('');
-  }
-
-  $('bootScreen').style.display = 'none';
-  $('app').style.display = 'block';
+    `;
+  }).join('');
 }
 
+/* ═══════ PENDING PERLU PERHATIAN ═══════ */
+function renderPendingPerhatian(){
+  const pendingJobs = S.jobs
+    .filter(j => j.status === 'pending')
+    .map(j => ({ ...j, hari: durasiPendingHari(j) }))
+    .filter(j => j.hari >= 7)
+    .sort((a, b) => b.hari - a.hari);
+
+  if(pendingJobs.length === 0){
+    $('pendingSection').style.display = 'none';
+    return;
+  }
+
+  $('pendingSection').style.display = 'block';
+  $('pendingList').innerHTML = pendingJobs.map(j => {
+    const lewat = j.hari > 30;
+    return `
+      <div class="card danger">
+        <div class="card-head">
+          <span class="card-code">${escapeHtml(j.barang)} ${escapeHtml(j.jenis)}</span>
+          <span class="badge danger">${j.hari} hari${lewat ? ' ⚠️' : ''}</span>
+        </div>
+        <div class="card-name">${escapeHtml(j.worker_nama)}</div>
+        <div class="card-info">${escapeHtml(j.pending_alasan || '-')}</div>
+        ${lewat ? '<div class="alert danger" style="margin-top:6px;font-size:0.72rem;">⚠️ Pending melebihi 30 hari. Segera selesaikan!</div>' : ''}
+        <a href="job-detail.html?id=${j.id}" class="btn btn-ghost btn-sm">📄 Detail</a>
+      </div>
+    `;
+  }).join('');
+}
+
+/* ═══════ TRANSAKSI TERAKHIR ═══════ */
+function renderTransaksiTerakhir(txList){
+  const lastTx = txList.slice(0, 5);
+
+  if(lastTx.length === 0){
+    $('transaksiList').innerHTML = '<div class="empty">Belum ada transaksi</div>';
+    return;
+  }
+
+  $('transaksiList').innerHTML = lastTx.map(t => {
+    const w = S.workers.find(x => x.id === t.worker_id);
+    const isPanjar = t.jenis === 'panjar';
+    return `
+      <div class="card ${isPanjar ? 'gantung' : 'done'}">
+        <div class="card-info">
+          ${isPanjar ? '🟡 Panjar' : '💰 Bayar'} — <b>${escapeHtml(w?.nama || '—')}</b> — ${rp(t.jumlah)}
+        </div>
+        <div class="card-info" style="font-size:0.72rem;">
+          ${fmtDate(t.tgl)}${t.keterangan ? ' • ' + escapeHtml(t.keterangan) : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+/* ═══════ INIT ═══════ */
 $('btnLogout').addEventListener('click', doLogout);
+
 setInterval(tick, 1000);
 tick();
 
-init().catch(e => { toast('Error: ' + e.message, true); console.error(e); });
+init().catch(e => {
+  toast('Error: ' + e.message, true);
+  console.error(e);
+});
 </script>
 </body>
 </html>
