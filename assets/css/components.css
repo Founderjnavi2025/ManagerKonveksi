@@ -1,0 +1,73 @@
+.card{ background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); padding: 12px 14px; margin-bottom: 8px; }
+.card.done{ border-left: 3px solid var(--ok); }
+.card.gantung{ border-left: 3px solid var(--warn); }
+.card.danger{ border-left: 3px solid var(--danger); }
+.card-head{ display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.card-code{ font-weight: 600; color: var(--dim); font-size: 0.74rem; font-family: 'SF Mono','Consolas',monospace; }
+.card-name{ font-weight: 700; color: var(--txt); font-size: 0.92rem; margin: 3px 0; }
+.card-info{ font-size: 0.78rem; color: var(--dim); line-height: 1.5; margin-bottom: 3px; }
+.card-info b{ color: var(--txt-2); font-weight: 700; }
+
+.badge{ display: inline-block; padding: 2px 7px; border-radius: var(--r-xs); font-size: 0.66rem; font-weight: 700; letter-spacing: 0.4px; margin-left: 4px; text-transform: uppercase; }
+.badge.ok{ background: var(--ok-soft); color: var(--ok); border: 1px solid var(--ok-line); }
+.badge.warn{ background: var(--warn-soft); color: var(--warn); border: 1px solid var(--warn-line); }
+.badge.blue{ background: var(--primary-soft); color: var(--primary); border: 1px solid var(--primary-line); }
+.badge.danger{ background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger-line); }
+.badge.dim{ background: var(--panel-3); color: var(--dim); border: 1px solid var(--line); }
+
+.stat-grid{ display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.stat-box{
+  background: var(--panel); border: 1px solid var(--line);
+  border-left: 3px solid var(--primary); border-radius: var(--r-sm); padding: 10px 12px;
+}
+.stat-box .lbl{ font-size: 0.66rem; letter-spacing: 0.5px; color: var(--dim); text-transform: uppercase; font-weight: 700; }
+.stat-box .val{ font-size: 1.15rem; color: var(--txt); font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; }
+.stat-box .val.ok{ color: var(--ok); }
+.stat-box .val.warn{ color: var(--warn); }
+.stat-box .val.danger{ color: var(--danger); }
+.stat-box.ok{ border-left-color: var(--ok); }
+.stat-box.warn{ border-left-color: var(--warn); }
+.stat-box.danger{ border-left-color: var(--danger); }
+
+.info-line{ display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 0.8rem; gap: 12px; }
+.info-line span:first-child{ color: var(--dim); flex-shrink: 0; font-weight: 500; }
+.info-line span:last-child{ color: var(--txt); font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.info-line.total{ border-bottom: none; border-top: 2px solid var(--line-dark); margin-top: 6px; padding-top: 10px; }
+.info-line.total span:first-child{ font-weight: 700; color: var(--txt); text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.5px; }
+.info-line.total span:last-child{ color: var(--ok); font-size: 1rem; font-weight: 800; }
+
+.alert{ padding: 10px 12px; border-radius: var(--r-sm); margin-top: 10px; font-size: 0.78rem; line-height: 1.5; border-left: 3px solid; }
+.alert.warn{ background: var(--warn-soft); border: 1px solid var(--warn-line); border-left: 3px solid var(--warn); color: var(--warn); }
+.alert.danger{ background: var(--danger-soft); border: 1px solid var(--danger-line); border-left: 3px solid var(--danger); color: var(--danger); }
+.alert.ok{ background: var(--ok-soft); border: 1px solid var(--ok-line); border-left: 3px solid var(--ok); color: var(--ok); }
+
+.empty{ text-align: center; padding: 36px 20px; color: var(--dim); font-size: 0.82rem; line-height: 1.6; background: var(--panel-2); border: 1px dashed var(--line-2); border-radius: var(--r-md); }
+.empty .big{ font-size: 2rem; display: block; margin-bottom: 10px; opacity: 0.3; }
+
+.chip-row{ display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 12px; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+.chip{ background: transparent; border: 1px solid transparent; color: var(--dim); padding: 5px 10px; border-radius: var(--r-xs); font-size: 0.74rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.chip.active{ background: var(--primary-soft); color: var(--primary); border-color: var(--primary-line); font-weight: 700; }
+
+.tbl{ width: 100%; border-collapse: collapse; font-size: 0.76rem; background: var(--panel); border-radius: var(--r-sm); overflow: hidden; border: 1px solid var(--line); }
+.tbl th{ background: var(--panel-2); color: var(--dim); padding: 9px 10px; text-align: left; font-weight: 700; font-size: 0.68rem; text-transform: uppercase; border-bottom: 2px solid var(--line-dark); }
+.tbl td{ padding: 9px 10px; border-top: 1px solid var(--line); color: var(--txt-2); font-variant-numeric: tabular-nums; }
+.tbl tbody tr:nth-child(even){ background: var(--panel-2); }
+
+.progress{ height: 5px; background: var(--panel-3); border-radius: 2px; margin: 8px 0; overflow: hidden; border: 1px solid var(--line); }
+.progress-bar{ height: 100%; background: var(--primary); transition: width 0.3s; }
+
+.timeline{ margin: 10px 0; padding-left: 18px; position: relative; }
+.timeline::before{ content: ''; position: absolute; left: 6px; top: 6px; bottom: 6px; width: 2px; background: var(--line); }
+.timeline-item{ position: relative; padding: 4px 0 8px 8px; font-size: 0.78rem; color: var(--txt-2); }
+.timeline-item::before{ content: ''; position: absolute; left: -15px; top: 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--primary); }
+.timeline-item.pending::before{ background: var(--warn); }
+.timeline-item.selesai::before{ background: var(--ok); }
+
+.slip{ background: #fff; color: #000; padding: 20px; font-family: 'Courier New','Courier',monospace; font-size: 11px; max-width: 360px; margin: 0 auto; line-height: 1.5; border: 1px solid #000; }
+.slip h4{ text-align: center; font-size: 13px; letter-spacing: 1.5px; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; }
+.slip .sub{ text-align: center; font-size: 10px; color: #555; margin-bottom: 10px; }
+.slip hr{ border: none; border-top: 1px dashed #000; margin: 8px 0; }
+.slip table{ width: 100%; border-collapse: collapse; font-size: 10px; }
+.slip td, .slip th{ padding: 3px 2px; text-align: left; vertical-align: top; }
+.slip .right{ text-align: right; }
+.slip .total{ font-weight: 900; font-size: 12px; }
