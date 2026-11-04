@@ -34,7 +34,6 @@
 
 <div id="toast"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script type="module">
 import { doLogin, setActiveRoom, getSession } from '../assets/js/auth.js';
 import { Rooms } from '../assets/js/supabase.js';
@@ -76,13 +75,19 @@ $('btnLogin').addEventListener('click', handleLogin);
 $('loginPassword').addEventListener('keydown', e => { if(e.key === 'Enter') handleLogin(); });
 
 (async () => {
-  const session = await getSession();
-  if(session){
-    window.location.href = '/pages/dashboard.html';
-    return;
+  try {
+    const session = await getSession();
+    if(session){
+      window.location.href = '/pages/dashboard.html';
+      return;
+    }
+  } catch(e) {
+    console.error('Session error:', e);
+    toast('Koneksi/session bermasalah: ' + e.message, true);
+  } finally {
+    $('bootScreen').style.display = 'none';
+    $('pageLogin').style.display = 'block';
   }
-  $('bootScreen').style.display = 'none';
-  $('pageLogin').style.display = 'block';
 })();
 </script>
 </body>
