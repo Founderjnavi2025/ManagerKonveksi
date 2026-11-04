@@ -6,6 +6,13 @@
 <title>Pekerja — KONVEKSI HUB</title>
 <link rel="stylesheet" href="../assets/css/style.css">
 <link rel="stylesheet" href="../assets/css/components.css">
+
+<style>
+#bootScreen { display: none !important; }
+#app { display: block !important; }
+#pageLogin { display: block !important; }
+</style>
+
 </head>
 <body>
 
@@ -289,13 +296,15 @@ tick();
 
 (async () => {
   try {
-    await requireAuth();
+    const session = await requireAuth();
+    if (!session) return;
     await load();
+  } catch(e){
+    toast('Pekerja gagal dimuat: ' + e.message, true);
+    console.error('Workers error:', e);
+  } finally {
     $('bootScreen').style.display = 'none';
     $('app').style.display = 'block';
-  } catch(e){
-    toast(e.message, true);
-    console.error(e);
   }
 })();
 </script>
