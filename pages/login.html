@@ -87,6 +87,8 @@ async function redirectByRole(session){
   if(role === 'super_admin'){
     localStorage.removeItem('active_room');
     localStorage.removeItem('active_room_name');
+    localStorage.removeItem('kh:active_room_id');
+    localStorage.removeItem('kh:active_room_name');
 
     window.location.href = '/pages/super-admin.html';
     return;
