@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Keuangan — KONVEKSI HUB</title>
+<link rel="stylesheet" href="../assets/css/style.css">
+<link rel="stylesheet" href="../assets/css/components.css">
+</head>
+<body>
+
+<div id="bootScreen" class="boot-screen">
+  <div class="boot-logo">KONVEKSI <span>HUB</span></div>
+  <div class="boot-spinner"></div>
+</div>
+
+<div id="app" style="display:none;">
+  <header>
+    <div class="header-left">
+      <a href="dashboard.html" class="btn-back">←</a>
+      <div>
+        <div class="logo">KONVEKSI <span>HUB</span></div>
+        <div class="room-sub" id="roomSub">—</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div class="clock" id="clock">--:--</div>
+      <button class="btn-logout" id="btnLogout">KELUAR</button>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <a href="dashboard.html">🏠 DASHBOARD</a>
+    <a href="jobs.html">📦 PEKERJAAN</a>
+    <a href="warehouse.html">👁️ MONITOR</a>
+    <a href="payroll.html">💰 PAYROLL</a>
+    <a href="finance.html" class="active">💵 KEUANGAN</a>
+    <a href="reports.html">📊 LAPORAN</a>
+  </div>
+
+  <div class="page active">
+    <div class="page-header">
+      <div class="ph-left">
+        <div class="ph-title">Keuangan Konveksi</div>
+        <div class="ph-sub">Catatan arus uang masuk dan keluar</div>
+      </div>
+      <div class="ph-actions">
+        <button class="btn btn-primary btn-sm" id="btnTambah">+ Transaksi</button>
+      </div>
+    </div>
+
+    <h2 class="section">Periode Keuangan</h2>
+    <div class="card">
+      <label class="f">Dari tanggal</label>
+      <input type="date" id="filterMulai">
+      <label class="f">Sampai tanggal</label>
+      <input type="date" id="filterAkhir">
+      <button class="btn btn-primary btn-sm" id="btnFilter" style="margin-top:10px;">Terapkan Filter</button>
+      <button class="btn btn-ghost btn-sm" id="btnSemua">Semua Riwayat</button>
+    </div>
+
+    <h2 class="section">Ringkasan</h2>
+    <div class="stat-grid">
+      <div class="stat-box">
+        <div class="lbl">Saldo Periode</div>
+        <div class="val" id="saldo">Rp0</div>
+      </div>
+      <div class="stat-box ok">
+        <div class="lbl">Pemasukan</div>
+        <div class="val ok" id="pemasukan">Rp0</div>
+      </div>
+      <div class="stat-box danger">
+        <div class="lbl">Pengeluaran</div>
+        <div class="val danger" id="pengeluaran">Rp0</div>
+      </div>
+      <div class="stat-box">
+        <div class="lbl">Jumlah Transaksi</div>
+        <div class="val" id="jumlah">0</div>
+      </div>
+    </div>
+
+    <div class="alert warn">
+      Saldo di sini adalah selisih pemasukan dan pengeluaran yang dicatat pada periode terpilih, bukan saldo rekening atau kas aktual.
+    </div>
+
+    <h2 class="section">Riwayat Transaksi</h2>
+    <div id="transactionList">
+      <div class="empty">Memuat...</div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="financeModal">
+  <div class="modal">
+    <h3>Tambah Transaksi</h3>
+    <div class="modal-body">
+      <label class="f">Jenis transaksi</label>
+      <select id="txTipe">
+        <option value="pemasukan">Pemasukan</option>
+        <option value="pengeluaran">Pengeluaran</option>
+      </select>
+
+      <label class="f">Tanggal</label>
+      <input type="date" id="txTanggal">
+
+      <label class="f">Kategori</label>
+      <select id="txKategori">
+        <option value="Modal">Modal</option>
+        <option value="Pembayaran pelanggan">Pembayaran pelanggan</option>
+        <option value="Pendapatan lain">Pendapatan lain</option>
+        <option value="Pembelian bahan">Pembelian bahan</option>
+        <option value="Listrik">Listrik</option>
+        <option value="Transportasi">Transportasi</option>
+        <option value="Operasional">Operasional</option>
+        <option value="Pembayaran upah">Pembayaran upah</option>
+        <option value="Lainnya">Lainnya</option>
+      </select>
+
+      <label class="f">Jumlah (Rp)</label>
+      <input type="number" id="txJumlah" min="1" step="1" inputmode="numeric" placeholder="Contoh: 500000">
+
+      <label class="f">Keterangan</label>
+      <input type="text" id="txKeterangan" maxlength="250" placeholder="Catatan transaksi (opsional)">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="btnBatal">Batal</button>
+      <button class="btn btn-primary" id="btnSimpan">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script type="module">
+import { requireAuth, getActiveRoomId, doLogout } from '../assets/js/auth.js';
+import { Rooms, Finance } from '../assets/js/supabase.js';
+import {
+  rupiah, todayISO, summarize, renderTransactions,
+} from '../assets/js/finance.js';
+
+const $ = id => document.getElementById(id);
+let roomId = null;
+let allTransactions = [];
+
+function toast(message, error = false) {
+  const el = $('toast');
+  el.textContent = message;
+  el.className = error ? 'show err' : 'show';
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => el.className = '', 2500);
+}
+
+function setModal(open) {
+  $('financeModal').classList.toggle('show', open);
+}
+
+function render(rows) {
+  const summary = summarize(rows);
+  $('saldo').textContent = rupiah(summary.saldo);
+  $('pemasukan').textContent = rupiah(summary.pemasukan);
+  $('pengeluaran').textContent = rupiah(summary.pengeluaran);
+  $('jumlah').textContent = summary.jumlah;
+  $('transactionList').innerHTML = renderTransactions(rows);
+}
+
+async function load() {
+  allTransactions = await Finance.list(roomId);
+  applyFilter();
+}
+
+function applyFilter() {
+  const mulai = $('filterMulai').value;
+  const akhir = $('filterAkhir').value;
+
+  if (mulai && akhir && mulai > akhir) {
+    toast('Tanggal awal tidak boleh melewati tanggal akhir', true);
+    return;
+  }
+
+  const rows = allTransactions.filter(tx =>
+    (!mulai || tx.tanggal >= mulai) &&
+    (!akhir || tx.tanggal <= akhir)
+  );
+  render(rows);
+}
+
+async function init() {
+  await requireAuth();
+  roomId = getActiveRoomId();
+  if (!roomId) throw new Error('Room belum dipilih');
+
+  const room = await Rooms.get(roomId);
+  $('roomSub').textContent = room.nama;
+  document.title = 'Keuangan — ' + room.nama;
+
+  $('txTanggal').value = todayISO();
+  await load();
+
+  $('bootScreen').style.display = 'none';
+  $('app').style.display = 'block';
+}
+
+$('btnTambah').addEventListener('click', () => {
+  $('txTanggal').value = todayISO();
+  $('txJumlah').value = '';
+  $('txKeterangan').value = '';
+  setModal(true);
+});
+
+$('btnBatal').addEventListener('click', () => setModal(false));
+
+$('btnSimpan').addEventListener('click', async () => {
+  const jumlah = Number($('txJumlah').value);
+
+  if (!Number.isSafeInteger(jumlah) || jumlah <= 0) {
+    toast('Jumlah harus berupa angka rupiah yang valid', true);
+    return;
+  }
+
+  const tx = {
+    id: crypto.randomUUID(),
+    room_id: roomId,
+    tanggal: $('txTanggal').value,
+    tipe: $('txTipe').value,
+    kategori: $('txKategori').value,
+    jumlah,
+    keterangan: $('txKeterangan').value.trim(),
+  };
+
+  if (!tx.tanggal) {
+    toast('Tanggal wajib diisi', true);
+    return;
+  }
+
+  $('btnSimpan').disabled = true;
+
+  try {
+    await Finance.save(tx);
+    setModal(false);
+    await load();
+    toast('Transaksi berhasil disimpan');
+  } catch (error) {
+    console.error(error);
+    toast(error.message || 'Gagal menyimpan transaksi', true);
+  } finally {
+    $('btnSimpan').disabled = false;
+  }
+});
+
+$('transactionList').addEventListener('click', async event => {
+  const button = event.target.closest('[data-delete]');
+  if (!button) return;
+
+  const id = button.dataset.delete;
+  if (!confirm('Hapus transaksi ini?')) return;
+
+  button.disabled = true;
+  try {
+    await Finance.delete(id);
+    await load();
+    toast('Transaksi dihapus');
+  } catch (error) {
+    console.error(error);
+    toast(error.message || 'Gagal menghapus transaksi', true);
+    button.disabled = false;
+  }
+});
+
+$('btnFilter').addEventListener('click', applyFilter);
+
+$('btnSemua').addEventListener('click', () => {
+  $('filterMulai').value = '';
+  $('filterAkhir').value = '';
+  applyFilter();
+});
+
+$('btnLogout').addEventListener('click', doLogout);
+
+function tick() {
+  $('clock').textContent = new Date().toLocaleTimeString('id-ID', {
+    hour12: false,
+  });
+}
+tick();
+setInterval(tick, 1000);
+
+init().catch(error => {
+  console.error(error);
+  toast(error.message || 'Gagal membuka keuangan', true);
+});
+</script>
+</body>
+</html>

@@ -227,3 +227,48 @@ export async function loadRoomData(roomId) {
 
   return { workers, jobs, transactions, periods, tarif };
 }
+
+export const Finance = {
+  async list(roomId, options = {}) {
+    let query = sb.from('finance_transactions')
+      .select('*')
+      .eq('room_id', roomId)
+      .order('tanggal', { ascending: false })
+      .order('created_at', { ascending: false });
+
+    if (options.mulai) query = query.gte('tanggal', options.mulai);
+    if (options.akhir) query = query.lte('tanggal', options.akhir);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  },
+
+  async save(tx) {
+    const payload = {
+      id: tx.id,
+      room_id: tx.room_id,
+      tanggal: tx.tanggal,
+      tipe: tx.tipe,
+      kategori: tx.kategori,
+      jumlah: tx.jumlah,
+      keterangan: tx.keterangan || null,
+    };
+
+    const { data, error } = await sb.from('finance_transactions')
+      .upsert(payload)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id) {
+    const { error } = await sb.from('finance_transactions')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+};
