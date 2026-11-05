@@ -51,6 +51,11 @@
       </div>
     </div>
 
+    <h2 class="section">Periode Payroll</h2>
+    <select id="filterPeriod" style="margin-bottom:12px;">
+      <option value="">Semua Periode</option>
+    </select>
+
     <h2 class="section">Filter</h2>
     <select id="filterWorker" style="margin-bottom:8px;">
       <option value="">— Semua Pekerja —</option>
@@ -110,6 +115,7 @@ const S = {
   jobs: [],
   transactions: [],
   periods: [],
+  selectedPeriodId: '',
   filterWorkerId: '',
   basis: 'setor',
   slipWorkerId: null,
@@ -150,6 +156,17 @@ async function load(){
   S.transactions = transactions;
   S.periods = periods;
 
+  const defaultPeriod = periods.find(p => p.status === 'aktif') || periods[0];
+  S.selectedPeriodId = defaultPeriod?.id || '';
+
+  const periodSelect = $('filterPeriod');
+  periodSelect.innerHTML = '<option value="">Semua Periode</option>' +
+    S.periods.map(p => {
+      const status = p.status === 'aktif' ? ' • AKTIF' : '';
+      return `<option value="${p.id}">${fmtDate(p.mulai + 'T00:00:00')} — ${fmtDate(p.akhir + 'T00:00:00')}${status}</option>`;
+    }).join('');
+  periodSelect.value = S.selectedPeriodId;
+
   $('roomSub').textContent = S.room.nama;
   document.title = 'Payroll — ' + S.room.nama;
 
@@ -163,7 +180,7 @@ async function load(){
 }
 
 function render(){
-  const periode = S.periods.find(p => p.status === 'aktif');
+  const periode = S.periods.find(p => p.id === S.selectedPeriodId) || null;
   $('payrollSub').textContent = periode
     ? 'Periode ' + fmtDate(periode.mulai + 'T00:00:00') + ' — ' + fmtDate(periode.akhir + 'T00:00:00')
     : '—';
@@ -222,7 +239,7 @@ window.openSlip = async function(workerId){
   const worker = S.workers.find(w => w.id === workerId);
   if(!worker){ toast('Pekerja tidak ditemukan', true); return; }
 
-  const periode = S.periods.find(p => p.status === 'aktif');
+  const periode = S.periods.find(p => p.id === S.selectedPeriodId) || null;
   let jobsFiltered = S.jobs.filter(j => j.worker_id === workerId);
   let txFiltered = S.transactions.filter(t => t.worker_id === workerId);
 
@@ -270,6 +287,11 @@ $('btnPrintSlip').addEventListener('click', handlePrintSlip);
 
 $('filterWorker').addEventListener('change', e => {
   S.filterWorkerId = e.target.value;
+  render();
+});
+
+$('filterPeriod').addEventListener('change', e => {
+  S.selectedPeriodId = e.target.value;
   render();
 });
 
